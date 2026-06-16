@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the SOLVENT deadman daily at 20:30 UTC
+# 30 min after qual_deadline_hour_utc (20:00) so the hourly cycle gets
+# first crack at the qualification trade. The explicit UTC suffix makes
+# this fire at 20:30 UTC regardless of the host's local timezone.
+
+[Timer]
+OnCalendar=*-*-* 20:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

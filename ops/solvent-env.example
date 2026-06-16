@@ -1,0 +1,37 @@
+# Copy to /opt/solvent/solvent.env and fill in. Never commit the real file.
+
+# Run mode: paper (default) | live. Flip to live at Phase 2 once the agent
+# wallet is funded and TWAK credentials are present on the host.
+SOLVENT_MODE=paper
+
+# Telegram alerts (BotFather token + chat id). Leave unset to disable.
+SOLVENT_TG_BOT_TOKEN=
+SOLVENT_TG_CHAT_ID=
+
+# ── Live trading (--mode live) ──────────────────────────────────────────
+# All inherited by the `twak` subprocess via the agent's environment.
+# TWAK API credentials — required for EVERY twak operation (quotes, swaps,
+# compete register). From `twak setup` or portal.trustwallet.com.
+# TWAK_ACCESS_ID=
+# TWAK_HMAC_SECRET=
+# TWAK wallet password — signs trades. Read from env, never argv.
+# TWAK_WALLET_PASSWORD=
+# Agent wallet key for x402 data payments (CMCSource) + its keystore password.
+# SOLVENT_PRIVATE_KEY=            # (also used by the anchor below)
+# SOLVENT_WALLET_PASSWORD=
+# Trading network + TWAK chain id (trading is mainnet; anchor stays testnet).
+# SOLVENT_TRADE_NETWORK=bsc-mainnet
+# SOLVENT_TWAK_CHAIN=bsc
+# SOLVENT_WALLET_ADDRESS=         # balance-read address; defaults to wallet's own
+
+# Regime brain (Claude advisor). Set to 1 to enable; needs ANTHROPIC_API_KEY.
+# SOLVENT_USE_ADVISOR=
+# ANTHROPIC_API_KEY=
+
+# ERC-8004 receipt anchoring (daily on-chain anchor of the receipt chain head).
+# bsc-testnet (gas-free paymaster) or bsc-mainnet. Identity wallet + agent ID.
+SOLVENT_BSC_NETWORK=bsc-testnet
+# SOLVENT_WALLET_PASSWORD=        # encrypts the keystore; required to sign
+# SOLVENT_PRIVATE_KEY=            # first run only — imports + persists the keystore
+# SOLVENT_AGENT_ID=               # from `python -m solvent.receipts.anchor --register`
+# SOLVENT_RECEIPTS_URL=https://solvent.gudman.xyz

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>How it works · SOLVENT</title>
+<meta name="description" content="SOLVENT's architecture: a deterministic barbell kernel, signed hash-chained decision receipts, local TWAK execution, and daily ERC-8004 anchoring." />
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="%23F0B90B" d="M16 3l4 4-4 4-4-4zM16 21l4 4-4 4-4-4zM7 12l4 4-4 4-4-4zM25 12l4 4-4 4-4-4zM16 12l4 4-4 4-4-4z"/></svg>' />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="SOLVENT" />
+<meta property="og:title" content="How SOLVENT works" />
+<meta property="og:description" content="A deterministic barbell kernel, signed hash-chained decision receipts, local execution, and daily ERC-8004 anchoring on BNB Chain." />
+<meta property="og:url" content="https://solvent.gudman.xyz/how-it-works" />
+<meta property="og:image" content="https://solvent.gudman.xyz/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="How SOLVENT works" />
+<meta name="twitter:description" content="A deterministic barbell kernel, signed hash-chained decision receipts, local execution, and daily ERC-8004 anchoring on BNB Chain." />
+<meta name="twitter:image" content="https://solvent.gudman.xyz/og.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body data-page="how-it-works">
+
+<div id="nav"></div>
+<div class="err-banner" id="errBanner"></div>
+
+<div class="page">
+  <div class="page-head">
+    <h1>How it works</h1>
+    <p>SOLVENT separates judgment from discretion: a deterministic kernel decides every dollar that moves, an LLM may only make it more conservative, and the whole process is written to a tamper-evident log.</p>
+  </div>
+
+  <section class="section">
+    <div class="prose">
+      <h2>The barbell strategy</h2>
+      <p>The agent runs a <b>barbell</b>: the large majority of equity stays in stablecoins as a hard floor, while a small concentrated sleeve rotates into the single strongest-momentum token. It is built to stay alive through a drawdown-disqualification tournament, not to chase the top of the leaderboard.</p>
+      <ul>
+        <li><b>Floor first.</b> At least 75% of equity is always in floor stables.</li>
+        <li><b>One concentrated sleeve.</b> At most one position, sized to ~22% of equity, entered only on a confirmed risk-on regime and positive momentum.</li>
+        <li><b>Cut losers fast.</b> A hard −12% stop, plus a momentum-decay exit when a position's strength falls below half its entry score.</li>
+        <li><b>Bank winners.</b> A lock-in ratchet tightens the sleeve cap as gains accrue, de-risking into the floor rather than riding it back down.</li>
+        <li><b>Stay qualified.</b> A deadman path fires a tiny stablecoin rotation if no trade has happened by the daily deadline, satisfying the one-trade-per-day rule even with every data feed down.</li>
+      </ul>
+    </div>
+    <div class="card spec" style="margin-top:18px">
+      <div class="row"><span class="l">Floor minimum</span><span class="v">75%</span></div>
+      <div class="row"><span class="l">Sleeve target</span><span class="v">22%</span></div>
+      <div class="row"><span class="l">Max concurrent positions</span><span class="v">1</span></div>
+      <div class="row"><span class="l">Hard stop</span><span class="v">−12%</span></div>
+      <div class="row"><span class="l">Kill switch (trailing DD)</span><span class="v">22%</span></div>
+      <div class="row"><span class="l">DQ threshold</span><span class="v">30%</span></div>
+      <div class="row"><span class="l">Max trades / day</span><span class="v">6</span></div>
+      <div class="row"><span class="l">Per-call data cap</span><span class="v">$0.05</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="prose">
+      <h2>Decision receipts</h2>
+      <p>Every cycle emits exactly one signed receipt: the data it bought and what each call cost, the signals it saw, the regime it inferred, its thesis, the intents it produced, and the resulting transactions. Each receipt commits to the previous one's hash, forming a chain — alter any past decision and every hash after it breaks.</p>
+      <p>The chain head is committed on-chain once a day under the agent's ERC-8004 identity, so the entire history is tamper-evident and publicly auditable: <a href="/proof">recompute it yourself</a> and compare the head with the on-chain anchor.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="prose">
+      <h2>Judgment vs discretion</h2>
+      <p>The kernel is pure, deterministic code — sizing, gating, stops, the ratchet and the kill switch live there and nothing downstream can override them. An optional Claude advisor reads the same signals, but it is wired as a <b>one-way ratchet</b>: it can only downgrade the regime and suppress entries, never force or enlarge a trade. If the model fails or refuses, the cycle falls back to the deterministic read and keeps running.</p>
+      <h2>Metered data, not alpha</h2>
+      <p>The agent buys a cheap base signal set every cycle and more expensive derivatives data only at market extremes — an information budget, capped per call and tracked against a session limit, enforced in the payment signer. Every purchase is recorded in its receipt. The point is honest accounting, not a performance claim.</p>
+      <h2>Architecture</h2>
+      <ul>
+        <li><b>kernel</b> — the deterministic barbell allocator, risk config, and token allowlist.</li>
+        <li><b>signals</b> — paid CMC data over x402, with a free public cross-check.</li>
+        <li><b>exec</b> — Trust Wallet Agent Kit on BNB Chain; one transaction per intent, local self-custody signing, never a blind re-send.</li>
+        <li><b>receipts</b> — the hash chain, the public read-only API, and the daily on-chain anchor.</li>
+        <li><b>ops</b> — heartbeat, watchdog, and an independent deadman so the agent stays qualified and observable unattended.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card card-pad" style="text-align:center; padding:36px 22px;">
+      <h2 style="margin:0 0 16px; font-size:18px;">Don't trust it — check it.</h2>
+      <div class="cta" style="justify-content:center; display:flex; gap:12px; flex-wrap:wrap;">
+        <a class="btn primary" href="/dashboard">Live dashboard</a>
+        <a class="btn" href="/proof">Verify the log</a>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="footer"></div>
+<div id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

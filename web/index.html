@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SOLVENT · Glass-box trading agent on BNB Chain</title>
+<meta name="description" content="An autonomous BNB Chain trading agent whose every decision is published as a hash-chained receipt, anchored on-chain and verifiable by anyone." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="SOLVENT" />
+<meta property="og:title" content="SOLVENT — the glass-box trading agent" />
+<meta property="og:description" content="Every decision is published as a hash-chained receipt, anchored on-chain and verifiable by anyone. Autonomous trading on BNB Smart Chain." />
+<meta property="og:url" content="https://solvent.gudman.xyz/" />
+<meta property="og:image" content="https://solvent.gudman.xyz/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="SOLVENT — the glass-box trading agent" />
+<meta name="twitter:description" content="Every decision is published as a hash-chained receipt, anchored on-chain and verifiable by anyone. Autonomous trading on BNB Smart Chain." />
+<meta name="twitter:image" content="https://solvent.gudman.xyz/og.png" />
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="%23F0B90B" d="M16 3l4 4-4 4-4-4zM16 21l4 4-4 4-4-4zM7 12l4 4-4 4-4-4zM25 12l4 4-4 4-4-4zM16 12l4 4-4 4-4-4z"/></svg>' />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body data-page="home">
+
+<div id="nav"></div>
+<div class="err-banner" id="errBanner"></div>
+
+<div class="hero reveal">
+  <div class="wrap">
+    <div class="eyebrow">Autonomous · On-chain · Verifiable</div>
+    <h1>Every decision, <span class="hl">receipted.</span></h1>
+    <p class="lead">SOLVENT is an autonomous trading agent on BNB Smart Chain. Each decision it makes — the data it bought, the thesis, the trade, the transaction — is published as a hash-chained receipt, anchored on-chain and verifiable by anyone.</p>
+    <div class="cta">
+      <a class="btn primary" href="/dashboard">View live dashboard</a>
+      <a class="btn" href="/proof">Verify the log</a>
+    </div>
+    <div class="teaser" id="teaser"></div>
+  </div>
+</div>
+
+<div class="page">
+
+  <section class="section">
+    <div class="section-head"><h2>What makes it different</h2><span class="note">trust, replaced by verification</span></div>
+    <div class="features">
+      <div class="card feature">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f0b90b" stroke-width="1.8" stroke-linecap="round"><path d="M4 18V9M9 18V5M14 18v-6M19 18v-9"/></svg></div>
+        <h3>Barbell strategy</h3>
+        <p>At least 75% sits in stables at all times; a single momentum sleeve takes at most 22%, with hard stops, a kill switch inside the drawdown limit, and a ratchet that banks gains. Pure deterministic code — the AI can only de-risk.</p>
+      </div>
+      <div class="card feature">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f0b90b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg></div>
+        <h3>Decision receipts</h3>
+        <p>Every cycle emits one signed receipt — data purchased, regime, thesis, intents, transactions — and each commits to the previous one's hash. Alter any past decision and every hash after it breaks.</p>
+      </div>
+      <div class="card feature">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f0b90b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12a3 3 0 0 0 3 3h2a3 3 0 0 0 0-6h-1M15 12a3 3 0 0 0-3-3h-2a3 3 0 0 0 0 6h1"/></svg></div>
+        <h3>ERC-8004 anchoring</h3>
+        <p>Once a day the chain head is committed on-chain under the agent's ERC-8004 identity. The proof runs end to end: public log → recomputed locally → on-chain commitment.</p>
+      </div>
+      <div class="card feature">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f0b90b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h3.2a1.3 1.3 0 0 1 0 2.6h-2.4a1.3 1.3 0 0 0 0 2.6H15"/></svg></div>
+        <h3>Metered data, not alpha</h3>
+        <p>The agent buys exactly the data it needs and records the cost in each receipt — capped per call against a session budget, enforced in the signer. Honest scope, surfaced per decision.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>How a cycle works</h2><span class="note">one heartbeat, fully logged</span></div>
+    <div class="steps">
+      <div class="card step"><div class="n">01</div><h4>Buy data</h4><p>Tiered market signals, each purchase metered and receipted.</p></div>
+      <div class="card step"><div class="n">02</div><h4>Decide</h4><p>The deterministic barbell kernel sizes the trade; an LLM advisor may only de-risk.</p></div>
+      <div class="card step"><div class="n">03</div><h4>Sign &amp; trade</h4><p>Local self-custody signing through Trust Wallet's agent kit on BNB Chain.</p></div>
+      <div class="card step"><div class="n">04</div><h4>Receipt &amp; anchor</h4><p>One signed receipt, hash-chained to the last, anchored on-chain daily.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="card card-pad" style="text-align:center; padding:40px 22px;">
+      <h2 style="margin:0 0 8px; font-size:20px;">See it run, then check its work.</h2>
+      <p style="margin:0 auto 22px; color:var(--text-2); max-width:480px;">The agent is live and posting receipts hourly. Watch the dashboard, or recompute the entire chain yourself in one command.</p>
+      <div class="cta" style="margin-top:0;">
+        <a class="btn primary" href="/dashboard">Live dashboard</a>
+        <a class="btn" href="/decisions">Decision log</a>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div id="footer"></div>
+<div id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

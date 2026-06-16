@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Decisions · SOLVENT</title>
+<meta name="description" content="The full hash-chained decision log of the SOLVENT trading agent — data bought, thesis, intents and on-chain executions per cycle." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="SOLVENT" />
+<meta property="og:title" content="SOLVENT · Decision log" />
+<meta property="og:description" content="One signed, hash-chained receipt per cycle — data bought, thesis, intents and on-chain executions. Tamper-evident by design." />
+<meta property="og:url" content="https://solvent.gudman.xyz/decisions" />
+<meta property="og:image" content="https://solvent.gudman.xyz/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="SOLVENT · Decision log" />
+<meta name="twitter:description" content="One signed, hash-chained receipt per cycle — data bought, thesis, intents and on-chain executions. Tamper-evident by design." />
+<meta name="twitter:image" content="https://solvent.gudman.xyz/og.png" />
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="%23F0B90B" d="M16 3l4 4-4 4-4-4zM16 21l4 4-4 4-4-4zM7 12l4 4-4 4-4-4zM25 12l4 4-4 4-4-4zM16 12l4 4-4 4-4-4z"/></svg>' />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body data-page="decisions">
+
+<div id="nav"></div>
+<div class="err-banner" id="errBanner"></div>
+
+<div class="page">
+  <div class="page-head">
+    <h1>Decisions</h1>
+    <p>One signed receipt per cycle. Each commits to the previous receipt's hash — tamper with any row and every hash below it breaks. Click a hash to copy it.</p>
+  </div>
+
+  <section class="section">
+    <div class="section-head"><h2>Latest decision</h2><span class="note">most recent cycle</span></div>
+    <div id="latest"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>Receipt log</h2><span class="note">newest first</span></div>
+    <div class="card scroll">
+      <table id="receipts">
+        <thead><tr>
+          <th>#</th><th>Time (UTC)</th><th>Data bought</th><th>Regime</th>
+          <th>Thesis</th><th>Intents</th><th>Executions</th><th>Receipt hash</th>
+        </tr></thead>
+        <tbody><tr><td colspan="8" class="muted">loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div id="footer"></div>
+<div id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

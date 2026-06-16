@@ -1,0 +1,15 @@
+[Unit]
+Description=SOLVENT receipt server — read-only public log over the hash chain
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=solvent
+WorkingDirectory=/opt/solvent
+EnvironmentFile=/opt/solvent/solvent.env
+ExecStart=/opt/solvent/.venv/bin/python -m solvent.receipts.server --data-dir /opt/solvent/data --host 127.0.0.1 --port 3078
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

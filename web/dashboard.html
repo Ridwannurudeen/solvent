@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard · SOLVENT</title>
+<meta name="description" content="Live performance, allocation, liveness and data costs for the SOLVENT trading agent on BNB Chain." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="SOLVENT" />
+<meta property="og:title" content="SOLVENT · Live dashboard" />
+<meta property="og:description" content="Live performance vs BNB, allocation, liveness and metered data costs for the glass-box trading agent." />
+<meta property="og:url" content="https://solvent.gudman.xyz/dashboard" />
+<meta property="og:image" content="https://solvent.gudman.xyz/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="SOLVENT · Live dashboard" />
+<meta name="twitter:description" content="Live performance vs BNB, allocation, liveness and metered data costs for the glass-box trading agent." />
+<meta name="twitter:image" content="https://solvent.gudman.xyz/og.png" />
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="%23F0B90B" d="M16 3l4 4-4 4-4-4zM16 21l4 4-4 4-4-4zM7 12l4 4-4 4-4-4zM25 12l4 4-4 4-4-4zM16 12l4 4-4 4-4-4z"/></svg>' />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body data-page="dashboard">
+
+<div id="nav"></div>
+<div class="err-banner" id="errBanner"></div>
+
+<div class="page">
+  <div class="page-head">
+    <h1>Dashboard</h1>
+    <p id="heroMeta">loading</p>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <section class="section">
+    <div class="section-head"><h2>Performance</h2><span class="note">% return since first receipt, marked hourly</span></div>
+    <div class="perf-grid">
+      <div class="card card-pad">
+        <div class="legend" id="chartLegend"></div>
+        <div class="chart" id="chart"><svg id="curve" viewBox="0 0 1000 210" preserveAspectRatio="none"></svg></div>
+        <div class="chart-x" id="chartX"></div>
+        <div class="chart-note" id="chartNote"></div>
+      </div>
+      <div class="card card-pad" id="alloc"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>Data costs</h2><span class="note">every purchase is recorded in its decision receipt</span></div>
+    <div class="card" id="spend"></div>
+  </section>
+</div>
+
+<div id="footer"></div>
+<div id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+[project]
+name = "solvent"
+version = "0.1.0"
+description = "SOLVENT — the glass-box trading agent (BNB Hack: AI Trading Agent Edition)"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "web3>=7",
+    "bnbagent==0.3.6",
+    "anthropic>=0.109",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["solvent*"]

@@ -1,0 +1,11 @@
+[Unit]
+Description=SOLVENT trading agent — one decision cycle
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=solvent
+WorkingDirectory=/opt/solvent
+EnvironmentFile=/opt/solvent/solvent.env
+ExecStart=/opt/solvent/.venv/bin/python -m solvent.run --mode ${SOLVENT_MODE} --data-dir /opt/solvent/data --once
