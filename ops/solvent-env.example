@@ -13,7 +13,8 @@ SOLVENT_TG_CHAT_ID=
 # TWAK API credentials are required for quotes, swaps, and competition calls.
 # TWAK_ACCESS_ID=
 # TWAK_HMAC_SECRET=
-# TWAK wallet password signs trades. Read from env, never argv.
+# TWAK wallet password signs trades. Optional if the solvent user's TWAK
+# keychain is available. Read from env, never argv.
 # TWAK_WALLET_PASSWORD=
 # Agent wallet key for x402 data payments (CMCSource) + its keystore password.
 # SOLVENT_PRIVATE_KEY=

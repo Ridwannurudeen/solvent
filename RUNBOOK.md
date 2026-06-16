@@ -37,7 +37,8 @@ If you choose env-backed credentials instead of TWAK's user config, put them in
 ```
 TWAK_ACCESS_ID=...
 TWAK_HMAC_SECRET=...
-TWAK_WALLET_PASSWORD=...
+# Optional if the `solvent` user's TWAK keychain works:
+# TWAK_WALLET_PASSWORD=...
 ```
 
 > ⚠️ VERIFY AT RUN TIME: that `twak` invoked by the **`solvent`** user (not root)
@@ -107,7 +108,8 @@ SOLVENT_PRIVATE_KEY=0x...
 SOLVENT_WALLET_PASSWORD=...
 SOLVENT_TRADE_NETWORK=bsc-mainnet
 SOLVENT_TWAK_CHAIN=bsc
-# (TWAK_ACCESS_ID / TWAK_HMAC_SECRET / TWAK_WALLET_PASSWORD already from Step 1)
+# (TWAK auth/wallet already configured from Step 1; TWAK_WALLET_PASSWORD is
+# optional when the `solvent` user's keychain is available)
 ```
 
 Fire one live cycle immediately instead of waiting for the hourly timer:

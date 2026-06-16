@@ -159,6 +159,25 @@ def test_password_passed_via_env_not_argv(tmp_path, monkeypatch):
     assert seen["env"].get("TWAK_WALLET_PASSWORD") == "pw"
 
 
+def test_password_can_fall_back_to_twak_keychain(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.delenv("TWAK_WALLET_PASSWORD", raising=False)
+
+    def capture(cmd, **k):
+        seen["cmd"] = cmd
+        seen["env"] = k.get("env", {})
+        return _ok_proc()
+
+    monkeypatch.setattr(exec_mod.subprocess, "run", capture)
+    journal = Journal(tmp_path / "journal.jsonl")
+    ex = TwakExecutor(journal)
+    result = ex.execute(_intent(), CYCLE)
+
+    assert result.ok is True
+    assert "TWAK_WALLET_PASSWORD" not in seen["env"]
+    assert "--json" in seen["cmd"]
+
+
 # ── PaperExecutor ─────────────────────────────────────────────────────
 
 

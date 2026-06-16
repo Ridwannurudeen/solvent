@@ -114,8 +114,8 @@ def build_live(data_dir: Path, cfg: RiskConfig):
     Required env:
       SOLVENT_PRIVATE_KEY      agent wallet key (signs x402 data payments)
       SOLVENT_WALLET_PASSWORD  keystore password for the above
-      TWAK_WALLET_PASSWORD     TWAK signing password (trade execution)
     Optional env:
+      TWAK_WALLET_PASSWORD     TWAK signing password; otherwise keychain fallback
       SOLVENT_WALLET_ADDRESS   address to read balances from (default: wallet's own)
       SOLVENT_TRADE_NETWORK    bsc-mainnet (default) | bsc-testnet
       SOLVENT_TWAK_CHAIN       TWAK chain name (default: bsc)
@@ -137,7 +137,7 @@ def build_live(data_dir: Path, cfg: RiskConfig):
 
     private_key = _require("SOLVENT_PRIVATE_KEY")
     wallet_password = _require("SOLVENT_WALLET_PASSWORD")
-    twak_password = _require("TWAK_WALLET_PASSWORD")
+    twak_password = os.environ.get("TWAK_WALLET_PASSWORD")
     network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
     twak_chain = os.environ.get("SOLVENT_TWAK_CHAIN", "bsc")
 

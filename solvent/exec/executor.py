@@ -104,7 +104,7 @@ class TwakExecutor:
     def __init__(
         self,
         journal: Journal,
-        password: str,
+        password: str | None = None,
         twak_bin: str = "twak",
         chain: str = "bsc",
         slippage_pct: float = 1.0,
@@ -147,7 +147,9 @@ class TwakExecutor:
         ]
         # Password via env, never argv — argv is world-readable in /proc
         # on the shared host.
-        env = {**os.environ, "TWAK_WALLET_PASSWORD": self._password}
+        env = {**os.environ}
+        if self._password:
+            env["TWAK_WALLET_PASSWORD"] = self._password
         try:
             proc = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=self.timeout_s, env=env
