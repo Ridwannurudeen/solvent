@@ -126,8 +126,8 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 | Reads markets via CMC | Live mode uses `CMCSource` through the x402 MCP client, with `get_global_metrics_latest`, `get_crypto_quotes_latest`, and conditional derivatives metrics recorded per receipt. |
 | Signs/executes via TWAK | `TwakExecutor` is the only live execution path; quote-only BSC swaps are verified on the VPS. |
 | User-defined rules | Risk constitution enforces allowlist, one-position cap, floor reserve, per-trade sizing, slippage, stop, drawdown kill switch, and lock-in ratchet. |
-| Live BSC trading week | Ready after stablecoin funding, key rotation, competition registration, and the explicit live-mode flip. |
-| On-chain Track 1 registration | Not yet registered in the competition contract; run `twak compete register` only after explicit approval. |
+| Live BSC trading week | Ready after stablecoin funding, key rotation, and the explicit live-mode flip. |
+| On-chain Track 1 registration | Registered in the BNB Hack competition contract: `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`. |
 | On-chain proof | ERC-8004 agent `136384` on BSC mainnet with a live daily receipt-chain anchor. |
 | Submission package | Public repo and demo video are still required before DoraHacks submission; repo remains private until explicitly approved for publication. |
 

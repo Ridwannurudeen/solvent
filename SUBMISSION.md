@@ -24,7 +24,7 @@ SOLVENT is a glass-box BSC trading agent: it reads CMC market data, decides unde
 - ERC-8004 registration tx: `0xda8461a78cc715964a8d653a6cf8a1968119516e443475f6ef5ca46c4eaa90b6`
 - First receipt-chain anchor tx: `0x01a50c38abfc5b577683b80d680b7a9e5e6c81e30cdcd0d81689c69afa1104ba`
 - Anchored head for `2026-06-16`: `0x986790cac174dfccbdfae2ffebd0bea37f90b12d35d3431f7f3275dc5a5fddb0`
-- Track 1 competition registration: pending explicit approval to run `twak compete register`
+- Track 1 competition registration tx: `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`
 
 ## Strategy
 
@@ -61,7 +61,6 @@ The verifier recomputes the public receipt hash chain and prints the head hash. 
 
 - Rotate exposed TWAK API credentials before live trading.
 - Fund the wallet with in-scope floor stables.
-- Run `twak compete register` after explicit approval.
 - Make the GitHub repo public after explicit approval.
 - Record and attach the demo video.
 
