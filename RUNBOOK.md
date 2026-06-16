@@ -11,7 +11,8 @@ in that file is the live switch** — no unit edits.
 
 Verified this session: TWAK CLI `v0.19.0` at `/usr/bin/twak` (on the `solvent`
 user's PATH); `twak swap FROM TO --usd N --chain bsc …` matches `executor.py`;
-`TWAK_WALLET_PASSWORD` is honored from env; `twak compete register` exists.
+`twak auth status`, `twak wallet status`, `twak wallet keychain check`, and
+`twak compete status` all pass for the `solvent` user.
 
 ---
 
@@ -23,13 +24,15 @@ land where the service's `twak` subprocess will read them:
 
 ```bash
 ssh root@75.119.153.252
-sudo -u solvent -H twak setup            # interactive: API creds + wallet
+sudo -u solvent -H twak auth setup       # interactive: API creds
+sudo -u solvent -H twak setup --wallet   # interactive: create/import wallet
 sudo -u solvent -H twak wallet address --chain bsc   # the address to fund
 sudo -u solvent -H twak compete status   # confirm creds work
 ```
 
-Then put the credentials in `/opt/solvent/solvent.env` (so the systemd-run
-agent inherits them) and `chmod 600` it:
+If you choose env-backed credentials instead of TWAK's user config, put them in
+`/opt/solvent/solvent.env` (so the systemd-run agent inherits them) and
+`chmod 600` it:
 
 ```
 TWAK_ACCESS_ID=...
@@ -52,17 +55,22 @@ Send the rehearsal stake to the Step-1 address on **BSC mainnet**:
 sudo -u solvent -H twak wallet balance --chain bsc    # confirm funds landed
 ```
 
-## Step 3 — Register the ERC-8004 identity + first anchor (gasless on testnet)
+## Step 3 — Register the ERC-8004 identity + first anchor (BSC mainnet)
 
-Lights up the dashboard's on-chain anchor panel. Gasless via the MegaFuel
-paymaster on `bsc-testnet` — needs a wallet key but no testnet BNB.
+Lights up the dashboard's on-chain anchor panel. This uses the `solvent` user's
+TWAK wallet/keychain on BSC mainnet; the wallet needs a small BNB balance for
+gas before registration or anchoring can mine.
 
 ```bash
 cd /opt/solvent
-sudo -u solvent SOLVENT_WALLET_PASSWORD=… SOLVENT_PRIVATE_KEY=0x… \
+sudo -u solvent -H env SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet \
   .venv/bin/python -m solvent.receipts.anchor --data-dir /opt/solvent/data --register
-# -> prints SOLVENT_AGENT_ID=<n> ; add it to solvent.env, then fire the first anchor:
-sudo -u solvent SOLVENT_AGENT_ID=<n> SOLVENT_WALLET_PASSWORD=… SOLVENT_PRIVATE_KEY=0x… \
+# -> prints SOLVENT_AGENT_ID=<n> ; add the three vars below to solvent.env:
+# SOLVENT_ANCHOR_BACKEND=twak
+# SOLVENT_BSC_NETWORK=bsc-mainnet
+# SOLVENT_AGENT_ID=<n>
+# Then fire the first anchor:
+sudo -u solvent -H env SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet SOLVENT_AGENT_ID=<n> \
   .venv/bin/python -m solvent.receipts.anchor --data-dir /opt/solvent/data
 sudo systemctl enable --now solvent-anchor.timer     # daily 23:00 UTC
 ```

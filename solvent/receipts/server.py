@@ -62,6 +62,7 @@ def state(data_dir: Path) -> dict:
         key=lambda a: a["day"],
         reverse=True,
     )
+    agent_id = os.environ.get("SOLVENT_AGENT_ID")
     return {
         "start_equity_usd": st.get("start_equity_usd"),
         "peak_equity_usd": st.get("peak_equity_usd"),
@@ -71,6 +72,7 @@ def state(data_dir: Path) -> dict:
         "alive": age is not None and age < ALIVE_MAX_AGE_S,
         "anchors": anchors,
         "anchor_network": os.environ.get("SOLVENT_BSC_NETWORK", "bsc-testnet"),
+        "agent_id": int(agent_id) if agent_id else None,
         "x402": {
             "session_budget_usd": cfg.x402_session_budget_usdc / 1e6,
             "max_per_call_usd": cfg.x402_max_per_call_usdc / 1e6,

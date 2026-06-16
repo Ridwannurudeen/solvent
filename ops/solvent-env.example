@@ -1,25 +1,24 @@
 # Copy to /opt/solvent/solvent.env and fill in. Never commit the real file.
 
-# Run mode: paper (default) | live. Flip to live at Phase 2 once the agent
-# wallet is funded and TWAK credentials are present on the host.
+# Run mode: paper (default) | live. Flip to live once the agent wallet is
+# funded and the live credentials are present on the host.
 SOLVENT_MODE=paper
 
 # Telegram alerts (BotFather token + chat id). Leave unset to disable.
 SOLVENT_TG_BOT_TOKEN=
 SOLVENT_TG_CHAT_ID=
 
-# ── Live trading (--mode live) ──────────────────────────────────────────
+# Live trading (--mode live)
 # All inherited by the `twak` subprocess via the agent's environment.
-# TWAK API credentials — required for EVERY twak operation (quotes, swaps,
-# compete register). From `twak setup` or portal.trustwallet.com.
+# TWAK API credentials are required for quotes, swaps, and competition calls.
 # TWAK_ACCESS_ID=
 # TWAK_HMAC_SECRET=
-# TWAK wallet password — signs trades. Read from env, never argv.
+# TWAK wallet password signs trades. Read from env, never argv.
 # TWAK_WALLET_PASSWORD=
 # Agent wallet key for x402 data payments (CMCSource) + its keystore password.
-# SOLVENT_PRIVATE_KEY=            # (also used by the anchor below)
+# SOLVENT_PRIVATE_KEY=
 # SOLVENT_WALLET_PASSWORD=
-# Trading network + TWAK chain id (trading is mainnet; anchor stays testnet).
+# Trading network + TWAK chain id.
 # SOLVENT_TRADE_NETWORK=bsc-mainnet
 # SOLVENT_TWAK_CHAIN=bsc
 # SOLVENT_WALLET_ADDRESS=         # balance-read address; defaults to wallet's own
@@ -29,9 +28,9 @@ SOLVENT_TG_CHAT_ID=
 # ANTHROPIC_API_KEY=
 
 # ERC-8004 receipt anchoring (daily on-chain anchor of the receipt chain head).
-# bsc-testnet (gas-free paymaster) or bsc-mainnet. Identity wallet + agent ID.
-SOLVENT_BSC_NETWORK=bsc-testnet
-# SOLVENT_WALLET_PASSWORD=        # encrypts the keystore; required to sign
-# SOLVENT_PRIVATE_KEY=            # first run only — imports + persists the keystore
+# Recommended for the BNB Hack: TWAK keychain on BSC mainnet. No raw private key
+# is required by the anchor backend when the solvent user's TWAK wallet is set up.
+SOLVENT_ANCHOR_BACKEND=twak
+SOLVENT_BSC_NETWORK=bsc-mainnet
 # SOLVENT_AGENT_ID=               # from `python -m solvent.receipts.anchor --register`
 # SOLVENT_RECEIPTS_URL=https://solvent.gudman.xyz

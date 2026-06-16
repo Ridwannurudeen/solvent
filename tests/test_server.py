@@ -69,6 +69,7 @@ def test_state_empty(tmp_path):
     assert s["position"] is None
     assert s["heartbeat_age_s"] is None
     assert s["alive"] is False
+    assert s["agent_id"] is None
 
 
 def test_state_reports_holdings_and_liveness(tmp_path):
@@ -105,6 +106,14 @@ def test_state_anchors_empty_by_default(tmp_path):
     s = state(tmp_path)
     assert s["anchors"] == []
     assert s["anchor_network"] == "bsc-testnet"
+
+
+def test_state_reports_configured_agent_id_and_anchor_network(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_AGENT_ID", "42")
+    monkeypatch.setenv("SOLVENT_BSC_NETWORK", "bsc-mainnet")
+    s = state(tmp_path)
+    assert s["agent_id"] == 42
+    assert s["anchor_network"] == "bsc-mainnet"
 
 
 def test_state_exposes_x402_guardrails(tmp_path):

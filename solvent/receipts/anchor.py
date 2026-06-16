@@ -19,6 +19,7 @@ import argparse
 import json
 import logging
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +32,96 @@ logger = logging.getLogger(__name__)
 def anchor_key(day_utc: str) -> str:
     """Metadata key the day's chain head is anchored under."""
     return f"solvent:anchor:{day_utc}"
+
+
+def _pick(payload: dict, *names: str):
+    for name in names:
+        if name in payload and payload[name] is not None:
+            return payload[name]
+    for value in payload.values():
+        if isinstance(value, dict):
+            picked = _pick(value, *names)
+            if picked is not None:
+                return picked
+    return None
+
+
+def _tx_hash(payload: dict) -> str | None:
+    return _pick(payload, "transactionHash", "txHash", "hash")
+
+
+def _agent_id(payload: dict) -> int:
+    value = _pick(payload, "agentId", "agent_id", "tokenId", "id")
+    if value is None:
+        raise RuntimeError(
+            f"TWAK register output did not include an agent id: {payload}"
+        )
+    return int(value)
+
+
+def _twak_chain(network: str) -> str:
+    return {
+        "bsc": "bsc",
+        "bsc-mainnet": "bsc",
+        "bsctestnet": "bsctestnet",
+        "bsc-testnet": "bsctestnet",
+    }.get(network, network)
+
+
+class TwakRegistry:
+    """ERC-8004 registry adapter backed by the TWAK CLI/keychain."""
+
+    def __init__(
+        self, chain: str, twak_bin: str = "twak", runner=subprocess.run
+    ) -> None:
+        self.chain = _twak_chain(chain)
+        self.twak_bin = twak_bin
+        self._runner = runner
+
+    def _json(self, cmd: list[str]) -> dict:
+        proc = self._runner(cmd, capture_output=True, text=True, timeout=180)
+        out = proc.stdout.strip()
+        if proc.returncode != 0:
+            detail = proc.stderr.strip() or out
+            raise RuntimeError(detail)
+        return json.loads(out)
+
+    def register_agent(self, agent_uri: str) -> dict:
+        payload = self._json(
+            [
+                self.twak_bin,
+                "erc8004",
+                "register",
+                "--uri",
+                agent_uri,
+                "--chain",
+                self.chain,
+                "--json",
+            ]
+        )
+        return {
+            **payload,
+            "agentId": _agent_id(payload),
+            "transactionHash": _tx_hash(payload),
+        }
+
+    def set_metadata(self, agent_id: int, key: str, value: str) -> dict:
+        payload = self._json(
+            [
+                self.twak_bin,
+                "erc8004",
+                "set-metadata",
+                str(agent_id),
+                "--key",
+                key,
+                "--value",
+                value,
+                "--chain",
+                self.chain,
+                "--json",
+            ]
+        )
+        return {**payload, "transactionHash": _tx_hash(payload)}
 
 
 class AnchorMarkers:
@@ -82,6 +173,9 @@ def run_anchor(
 
 def _build_registry(network: str):
     """Construct the live ERC8004Agent from env credentials."""
+    if os.environ.get("SOLVENT_ANCHOR_BACKEND") == "twak":
+        return TwakRegistry(network, twak_bin=os.environ.get("TWAK_BIN", "twak"))
+
     from bnbagent import ERC8004Agent, EVMWalletProvider
 
     password = os.environ.get("SOLVENT_WALLET_PASSWORD")
@@ -95,6 +189,15 @@ def _build_registry(network: str):
 
 def _register(registry) -> int:
     """One-time: register SOLVENT's ERC-8004 identity. Returns the agent ID."""
+    if not hasattr(registry, "generate_agent_uri"):
+        endpoint = os.environ.get("SOLVENT_RECEIPTS_URL", "https://solvent.gudman.xyz")
+        result = registry.register_agent(agent_uri=endpoint)
+        agent_id = result["agentId"]
+        logger.info(
+            "registered agent id=%s tx=%s", agent_id, result.get("transactionHash")
+        )
+        return agent_id
+
     from bnbagent import AgentEndpoint
 
     endpoint = os.environ.get("SOLVENT_RECEIPTS_URL", "https://solvent.gudman.xyz")

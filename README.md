@@ -81,14 +81,14 @@ The standalone verifier recomputes every receipt hash from genesis and checks ea
 
 ## ERC-8004 on-chain anchoring
 
-`receipts/anchor.py` posts the chain head as ERC-8004 metadata under SOLVENT's registered identity, one cheap tx/day. On **bsc-testnet** this is **gasless** via the MegaFuel paymaster (`use_paymaster=True`), so registration and anchoring need no testnet BNB — only a wallet key. Built against `bnbagent==0.3.6`.
+`receipts/anchor.py` posts the chain head as ERC-8004 metadata under SOLVENT's registered identity, one cheap tx/day. The BNB Hack path uses the TWAK CLI/keychain on **BSC mainnet**, so anchoring reuses the same self-custody wallet as execution and does not require a raw private key in the anchor environment.
 
 ```bash
 # one-time identity registration (prints SOLVENT_AGENT_ID)
-SOLVENT_WALLET_PASSWORD=… SOLVENT_PRIVATE_KEY=0x… \
+SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet \
   python -m solvent.receipts.anchor --data-dir ./data --register
 # daily anchor (idempotent per UTC day via data/anchors.json)
-SOLVENT_AGENT_ID=… SOLVENT_WALLET_PASSWORD=… SOLVENT_PRIVATE_KEY=0x… \
+SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet SOLVENT_AGENT_ID=... \
   python -m solvent.receipts.anchor --data-dir ./data
 ```
 
