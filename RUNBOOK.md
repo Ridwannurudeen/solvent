@@ -75,7 +75,22 @@ sudo -u solvent -H env SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainn
 sudo systemctl enable --now solvent-anchor.timer     # daily 23:00 UTC
 ```
 
-## Step 4 — Pre-flight, then flip to live
+## Step 4 — Register for Track 1 competition (approval-gated)
+
+DoraHacks Track 1 requires on-chain competition registration of the agent wallet
+before the live trading window. This is separate from the ERC-8004 identity.
+
+```bash
+sudo -u solvent -H twak compete status
+# Only after explicit approval:
+sudo -u solvent -H twak compete register
+sudo -u solvent -H twak compete status
+```
+
+Expected result after registration: `registered: true` for
+`0xE4fe23FB57dbb9AC2f685ea29B6b9A1409A0d359`.
+
+## Step 5 — Pre-flight, then flip to live
 
 **Pre-flight (no broadcast)** — confirm TWAK resolves bare symbols on BSC; this
 was the one thing untestable without creds:
@@ -129,5 +144,5 @@ npm uninstall -g @trustwallet/cli
 
 ## Still gated on you (standing rules)
 
-- **External gates:** Telegram G1 (30% DD = start-capital vs peak-equity?) + G6 (mark methodology); CMC G5 (tier covers derivatives/funding).
+- **External gates:** Track 1 `twak compete register`, Telegram G1 (30% DD = start-capital vs peak-equity?) + G6 (mark methodology); CMC G5 (tier covers derivatives/funding).
 - **Submission:** DoraHacks BUIDL + on-chain `Register`, demo video, X thread — **only with explicit approval.**

@@ -5,8 +5,8 @@ Target flow (from the plan): **data purchase → decision → local signing → 
 asks you to trust it; SOLVENT lets you verify it.*
 
 Two cuts are marked per scene:
-- **[TODAY]** — filmable right now against the live paper agent at `solvent.gudman.xyz`.
-- **[LIVE]** — needs go-live (funded wallet + TWAK creds + ERC-8004 identity; see `RUNBOOK.md`). Film after Step 4 of the runbook.
+- **[TODAY]** — filmable right now against the live paper agent, mainnet ERC-8004 identity, and on-chain anchor at `solvent.gudman.xyz`.
+- **[LIVE]** — needs stablecoin funding, key rotation, competition registration, and the live-mode flip. Film after Step 4 of the runbook.
 
 Keep it screen-recording + voiceover. No talking head. Total ~3:30.
 
@@ -86,7 +86,7 @@ python verify_receipts.py
 standard-library Python — it never touches the agent's code. It pulls the public
 log, recomputes every hash from scratch, and prints the head. It matches."
 
-## Scene 6 — The anchor closes the loop (3:05–3:25) · [LIVE]
+## Scene 6 — The anchor closes the loop (3:05–3:25) · [TODAY]
 
 **Screen:** the **On-chain anchors** panel; click a day's tx to BscScan.
 
@@ -95,8 +95,8 @@ ERC-8004 identity. So the proof is end-to-end: public log, recomputed locally,
 committed on-chain. A self-custody user could actually audit this agent — and
 then trust it."
 
-> [TODAY] the panel shows the "fires once the identity is registered" state;
-> hold Scene 5 longer and end on the verifier instead until go-live.
+> Show ERC-8004 agent `136384`, the BSC mainnet anchor transaction, and the
+> matching head hash from `/verify`.
 
 ## Close (3:25–3:30)
 
@@ -110,8 +110,8 @@ then trust it."
 
 - Record the terminal at a large font; the BscScan tab in a clean profile.
 - Pre-run `python verify_receipts.py` once so the head hash is warm on screen.
-- The §7 ideal ("BSC tx → anchor") needs go-live; until then ship the **[TODAY]**
-  cut — it still proves the differentiator (glass-box verification), which the
-  on-chain scenes only reinforce.
+- The receipt-anchor path is live on BSC mainnet. The only remaining [LIVE]
+  scene is a real TWAK swap receipt after stablecoin funding and explicit
+  live-mode approval.
 - **Do not publish** (video, thread, or submission) without explicit approval —
   standing rule.

@@ -4,7 +4,7 @@
 
 An autonomous BNB Smart Chain trading agent whose distinguishing feature is **honesty you can verify**: every decision the agent makes is written as a signed, hash-chained **decision receipt** — what data it bought, what that cost, the regime it inferred, its thesis, the intents it produced, and the resulting transactions. The chain head is anchored on-chain daily under the agent's ERC-8004 identity, so the whole record is tamper-evident and publicly auditable.
 
-**Live (paper mode):** https://solvent.gudman.xyz — equity vs BNB buy-and-hold, current barbell allocation, liveness heartbeat, a live `CHAIN VERIFIED` badge, and the full receipt stream.
+**Live (paper mode + mainnet proof):** https://solvent.gudman.xyz — equity vs BNB buy-and-hold, current barbell allocation, liveness heartbeat, a live `CHAIN VERIFIED` badge, mainnet ERC-8004 anchors, and the full receipt stream.
 
 Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state)
 
@@ -113,10 +113,23 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units). **108 tests, ruff-clean.**
-- **Live now:** paper agent running hourly on a VPS with the dashboard public at solvent.gudman.xyz; receipts accumulating autonomously.
+- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units). **114 tests, ruff-clean.**
+- **Live now:** paper agent running hourly on a VPS with the dashboard public at solvent.gudman.xyz; receipts accumulating autonomously; ERC-8004 identity `136384` and daily anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
-- **Live mode wired (credential-gated):** `--mode live` assembles the real stack — CMC x402 paid signals (`CMCSource`), TWAK execution (`TwakExecutor`), and on-chain balance reads (`LiveBook`) — and fails fast if `SOLVENT_PRIVATE_KEY` / `SOLVENT_WALLET_PASSWORD` / `TWAK_WALLET_PASSWORD` are absent, so it cannot broadcast without explicit credentials. What remains is operational, not code: a funded agent wallet, TWAK API credentials on the host (`TWAK_ACCESS_ID` / `TWAK_HMAC_SECRET`, required for every `twak` call), and the ERC-8004 identity registered. The TWAK CLI (v0.19.0) is installed and its `swap` interface + `TWAK_WALLET_PASSWORD` env contract verified against `executor.py`. Live trading has not been run.
+- **Live mode wired (credential-gated):** `--mode live` assembles the real stack — CMC x402 paid signals (`CMCSource`), TWAK execution (`TwakExecutor`), and on-chain balance reads (`LiveBook`) — and fails fast if `SOLVENT_PRIVATE_KEY` / `SOLVENT_WALLET_PASSWORD` / `TWAK_WALLET_PASSWORD` are absent, so it cannot broadcast without explicit credentials. TWAK auth/wallet/keychain, quote-only swaps, ERC-8004 registration, and the daily anchor timer are verified on BSC mainnet. Remaining live-trading gates: rotate exposed TWAK API credentials, fund the wallet with in-scope floor stables, run `twak compete register` with explicit approval, and flip `SOLVENT_MODE=live`.
+
+## BNB Hack alignment
+
+| Requirement | SOLVENT status |
+|---|---|
+| Track 1 autonomous agent | Built as an executable hourly agent with deterministic rules, liveness heartbeat, watchdog, deadman daily qualification path, and systemd timers. |
+| Reads markets via CMC | Live mode uses `CMCSource` through the x402 MCP client, with `get_global_metrics_latest`, `get_crypto_quotes_latest`, and conditional derivatives metrics recorded per receipt. |
+| Signs/executes via TWAK | `TwakExecutor` is the only live execution path; quote-only BSC swaps are verified on the VPS. |
+| User-defined rules | Risk constitution enforces allowlist, one-position cap, floor reserve, per-trade sizing, slippage, stop, drawdown kill switch, and lock-in ratchet. |
+| Live BSC trading week | Ready after stablecoin funding, key rotation, competition registration, and the explicit live-mode flip. |
+| On-chain Track 1 registration | Not yet registered in the competition contract; run `twak compete register` only after explicit approval. |
+| On-chain proof | ERC-8004 agent `136384` on BSC mainnet with a live daily receipt-chain anchor. |
+| Submission package | Public repo and demo video are still required before DoraHacks submission; repo remains private until explicitly approved for publication. |
 
 ## Rubric map
 
