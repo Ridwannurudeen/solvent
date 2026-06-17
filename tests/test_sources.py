@@ -12,6 +12,7 @@ from solvent.receipts.chain import DataPurchase
 from solvent.signals.sources import (
     CMC_QUOTE_IDS,
     CMCSource,
+    _extract_fear_greed,
     _extract_quote_fields,
     _iter_quotes,
     momentum_score,
@@ -33,7 +34,20 @@ def test_iter_quotes_handles_list_and_keyed_shapes():
     assert _iter_quotes({"data": [entry]}) == [entry]
     assert _iter_quotes({"data": {"CAKE": entry}}) == [entry]
     assert _iter_quotes({"data": {"CAKE": [entry]}}) == [entry]
+    assert _iter_quotes(
+        {"headers": ["symbol", "price"], "rows": [["ASTER", 0.66]]}
+    ) == [{"symbol": "ASTER", "price": 0.66}]
     assert _iter_quotes(None) == []
+
+
+def test_extract_fear_greed_handles_cmc_sentiment_shape():
+    assert (
+        _extract_fear_greed(
+            {"sentiment": {"fear_greed": {"current": {"value": "Fear", "index": 25}}}}
+        )
+        == 25
+    )
+    assert _extract_fear_greed({"fear_and_greed": {"value": 40}}) == 40
 
 
 def test_extract_quote_fields_nested_and_flat():
@@ -99,6 +113,7 @@ def test_fetch_happy_path_parses_signals_and_meters_cost():
     assert signals.btc_funding_rate == 0.0002
     # every paid call is metered into the receipt.
     assert [p.cost_usdc for p in purchases] == [0.01, 0.01, 0.01]
+    assert "36341" in CMC_QUOTE_IDS
 
 
 def test_fetch_degrades_when_global_metrics_fail():

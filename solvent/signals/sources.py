@@ -52,6 +52,7 @@ CMC_IDS = {
     "FET": 3773,
     "INJ": 7226,
     "PENDLE": 9481,
+    "ASTER": 36341,
     "AAVE": 7278,
     "ETC": 1321,
     "FIL": 2280,
@@ -79,6 +80,41 @@ def _mcp_json(result: dict | None) -> dict | list | None:
     return None
 
 
+def _to_int(value) -> int | None:
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(float(value))
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_fear_greed(metrics: dict) -> int | None:
+    fg = (
+        metrics.get("fear_and_greed")
+        or metrics.get("fearAndGreed")
+        or metrics.get("fear_greed")
+    )
+    sentiment = metrics.get("sentiment")
+    if fg is None and isinstance(sentiment, dict):
+        fg = sentiment.get("fear_greed") or sentiment.get("fearAndGreed")
+    if not isinstance(fg, dict):
+        return _to_int(fg)
+
+    candidates = []
+    current = fg.get("current")
+    if isinstance(current, dict):
+        candidates.extend([current.get("index"), current.get("value")])
+    candidates.extend([fg.get("index"), fg.get("value")])
+    for candidate in candidates:
+        value = _to_int(candidate)
+        if value is not None:
+            return value
+    return None
+
+
 class CMCSource:
     """Paid production source via the x402 MCP server."""
 
@@ -95,15 +131,7 @@ class CMCSource:
         gm = _mcp_json(gm_raw)
         fear_greed = None
         if isinstance(gm, dict):
-            fg = (
-                gm.get("fear_and_greed")
-                or gm.get("fearAndGreed")
-                or gm.get("fear_greed")
-            )
-            if isinstance(fg, dict):
-                fg = fg.get("value")
-            if isinstance(fg, (int, float)):
-                fear_greed = int(fg)
+            fear_greed = _extract_fear_greed(gm)
         if fear_greed is None:
             degraded = True
 
@@ -159,6 +187,14 @@ def _iter_quotes(quotes) -> list[dict]:
     if isinstance(quotes, dict):
         data = quotes.get("data", quotes)
         if isinstance(data, dict):
+            headers = data.get("headers")
+            rows = data.get("rows")
+            if isinstance(headers, list) and isinstance(rows, list):
+                return [
+                    {str(k): v for k, v in zip(headers, row)}
+                    for row in rows
+                    if isinstance(row, list)
+                ]
             out = []
             for v in data.values():
                 if isinstance(v, list):
