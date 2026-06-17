@@ -52,3 +52,16 @@ def test_load_env_file_sets_presence_without_output(tmp_path, monkeypatch):
     assert report["env"]["required_live"]["SOLVENT_PRIVATE_KEY"] is True
     assert report["env"]["data_dir"] == "/tmp/solvent-live"
     assert "not-printed" not in str(report)
+
+
+def test_preflight_reports_missing_wallet_address(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_PRIVATE_KEY", "not-printed")
+    monkeypatch.setenv("SOLVENT_WALLET_PASSWORD", "not-printed")
+    monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+    monkeypatch.delenv("SOLVENT_WALLET_ADDRESS", raising=False)
+
+    report = preflight(tmp_path, include_twak=False)
+
+    assert report["env"]["required_live"]["SOLVENT_PRIVATE_KEY"] is True
+    assert report["env"]["required_live"]["SOLVENT_WALLET_ADDRESS"] is False

@@ -7,6 +7,7 @@
 - Verifier API: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
+- Evidence page: https://solvent.gudman.xyz/proof
 
 ## On-chain Proof
 
@@ -28,6 +29,8 @@
 - The public dashboard is intentionally still paper mode plus mainnet proof.
 - Isolated live proof runs are stored outside `/opt/solvent/data` so public paper accounting is not mixed with real wallet equity.
 - Production live mode remains approval-gated and must use an isolated `SOLVENT_DATA_DIR`.
+- Unresolved TWAK attempts are resolved only through append-only journal
+  recovery (`solvent.ops.exec_recovery`) after manual chain review.
 
 ## Submission-gated Items
 

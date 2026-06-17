@@ -9,6 +9,8 @@ An autonomous BNB Smart Chain trading agent whose distinguishing feature is **ho
 Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state)
 
 Submission evidence packet: [`EVIDENCE.md`](EVIDENCE.md)
+Live cutover checklist: [`LIVE_CUTOVER.md`](LIVE_CUTOVER.md)
+Submission packet: [`SUBMISSION_PACKET.md`](SUBMISSION_PACKET.md)
 
 ---
 
@@ -37,7 +39,7 @@ solvent/
     chain.py       hash-chained receipt log + verify_chain()
     server.py      read-only HTTP API (/, /receipts, /verify, /state, /summary)
     anchor.py      daily ERC-8004 on-chain anchor of the chain head
-  ops/           deadman (independent qualification trade), watchdog, alerts
+  ops/           deadman, watchdog, alerts, preflight, execution recovery
   engine.py      run_cycle(): one decision heartbeat
   run.py         runner — assembles paper/live mode and fires cycles
 ```
@@ -104,7 +106,7 @@ Requires Python ≥ 3.12.
 
 ```bash
 pip install -e .
-python -m pytest -q                                   # 120 tests
+python -m pytest -q                                   # 132 tests
 python -m solvent.run --mode paper --data-dir ./data --once     # one cycle
 python -m solvent.run --mode paper --data-dir ./data --loop 3600  # hourly
 python -m solvent.receipts.server --data-dir ./data --port 3078   # serve the glass box
@@ -115,7 +117,7 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units). **120 tests, ruff-clean.**
+- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units). **132 tests, ruff-clean.**
 - **Live now:** paper agent running hourly on a VPS with the dashboard public at solvent.gudman.xyz; receipts accumulating autonomously; ERC-8004 identity `136384` and daily anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
 - **Live mode wired (credential-gated):** `--mode live` assembles the real stack — CMC x402 paid signals (`CMCSource`), TWAK execution (`TwakExecutor`), and on-chain balance reads (`LiveBook`) — and fails fast without the x402 signer key plus TWAK wallet/keychain access. TWAK auth/wallet/keychain, quote-only swaps, ERC-8004 registration, Track 1 registration, the daily anchor timer, and an isolated $2 mainnet live rehearsal are verified on BSC mainnet. Remaining live-production gates: keep the x402 signer funded with BSC USD1, reset or isolate live accounting state, and explicitly flip `SOLVENT_MODE=live`.

@@ -14,6 +14,7 @@ SOLVENT is a glass-box BSC trading agent: it reads CMC market data, decides unde
 - Public receipt API: https://solvent.gudman.xyz/receipts
 - Public verifier: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
+- Evidence page: https://solvent.gudman.xyz/proof
 - GitHub: pending public release approval
 - Demo video: pending recording
 

@@ -62,6 +62,13 @@ class Journal:
         e = self._entries.get(key)
         return e["state"] if e else None
 
+    def latest_entry(self, key: str) -> dict | None:
+        e = self._entries.get(key)
+        return dict(e) if e else None
+
+    def pending_entries(self) -> list[dict]:
+        return [dict(e) for e in self._entries.values() if e["state"] == self.PENDING]
+
     def mark_attempted(self, key: str, intent: TradeIntent) -> None:
         self._write(
             {
@@ -76,16 +83,44 @@ class Journal:
             }
         )
 
-    def mark_result(self, key: str, ok: bool, tx_hash: str | None, detail: str) -> None:
+    def mark_result(
+        self,
+        key: str,
+        ok: bool,
+        tx_hash: str | None,
+        detail: str,
+        ts: datetime | None = None,
+    ) -> None:
         self._write(
             {
                 "key": key,
                 "state": "CONFIRMED" if ok else "FAILED",
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": (ts or datetime.now(timezone.utc)).isoformat(),
                 "tx_hash": tx_hash,
                 "detail": detail[:500],
             }
         )
+
+    def resolve_attempt(
+        self,
+        key: str,
+        *,
+        ok: bool,
+        tx_hash: str | None,
+        detail: str,
+        ts: datetime | None = None,
+    ) -> dict:
+        state = self.state_of(key)
+        if state is None:
+            raise KeyError(key)
+        if state != self.PENDING:
+            raise ValueError(f"{key} is {state}, not {self.PENDING}")
+        if ok and not tx_hash:
+            raise ValueError("confirmed attempts require a tx_hash")
+        self.mark_result(key, ok=ok, tx_hash=tx_hash, detail=detail, ts=ts)
+        entry = self.latest_entry(key)
+        assert entry is not None
+        return entry
 
     def confirmed_trades_on(self, day_utc: str) -> int:
         return sum(
@@ -125,6 +160,10 @@ class TwakExecutor:
         if prior == Journal.PENDING:
             return ExecutionResult(
                 key, False, None, "prior attempt unresolved; refusing to re-send"
+            )
+        if prior == "FAILED":
+            return ExecutionResult(
+                key, False, None, "prior attempt failed; refusing to re-send same key"
             )
         if self.journal.has_unresolved():
             return ExecutionResult(
@@ -170,10 +209,8 @@ class TwakExecutor:
         except ValueError:
             pass
         ok = proc.returncode == 0 and tx_hash is not None
-        if not ok and proc.returncode != 0:
-            logger.error(
-                "twak exited nonzero after attempt; outcome UNKNOWN — halting further sends"
-            )
+        if not ok:
+            logger.error("twak attempt outcome UNKNOWN - halting further sends")
             return ExecutionResult(key, False, tx_hash, out[:200])
         self.journal.mark_result(key, ok, tx_hash, out)
         return ExecutionResult(key, ok, tx_hash, out[:200])

@@ -116,6 +116,21 @@ def test_any_unresolved_entry_halts_a_new_intent(tmp_path, monkeypatch):
     assert ran == []  # trading frozen until the dangling attempt resolves
 
 
+def test_failed_prior_attempt_refuses_resend_same_key(tmp_path, monkeypatch):
+    ex, journal = _twak(tmp_path)
+    key = intent_key(_intent(), CYCLE)
+    journal.mark_attempted(key, _intent())
+    journal.mark_result(key, ok=False, tx_hash=None, detail="operator failed")
+    ran = []
+    monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: ran.append(1))
+
+    result = ex.execute(_intent(), CYCLE)
+
+    assert result.ok is False
+    assert "failed" in result.detail
+    assert ran == []
+
+
 def test_timeout_leaves_attempt_unresolved_and_halts_next(tmp_path, monkeypatch):
     def boom(*a, **k):
         raise exec_mod.subprocess.TimeoutExpired(cmd="twak", timeout=1)
@@ -140,6 +155,22 @@ def test_nonzero_exit_marks_failed_not_confirmed(tmp_path, monkeypatch):
     )
     ex, journal = _twak(tmp_path)
     result = ex.execute(_intent(), CYCLE)
+    assert result.ok is False
+    assert journal.state_of(result.intent_key) == Journal.PENDING
+    assert journal.has_unresolved() is True
+
+
+def test_zero_exit_without_tx_hash_stays_unresolved(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        exec_mod.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(
+            returncode=0, stdout='{"status":"ok"}', stderr=""
+        ),
+    )
+    ex, journal = _twak(tmp_path)
+    result = ex.execute(_intent(), CYCLE)
+
     assert result.ok is False
     assert journal.state_of(result.intent_key) == Journal.PENDING
     assert journal.has_unresolved() is True

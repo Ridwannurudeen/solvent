@@ -12,6 +12,9 @@ systemd unit loads `/opt/solvent/solvent.env`. Current unit templates read both
 an isolated directory such as `/opt/solvent/data-live`; do not point live mode
 at the paper dashboard directory.
 
+The concise cutover checklist is in `LIVE_CUTOVER.md`; this runbook keeps the
+full setup and recovery context.
+
 Verified this session: TWAK CLI `v0.19.0` at `/usr/bin/twak` (on the `solvent`
 user's PATH); `twak swap FROM TO --usd N --chain bsc …` matches `executor.py`;
 `twak auth status`, `twak wallet status`, `twak wallet keychain check`, and
@@ -144,6 +147,37 @@ curl -s https://solvent.gudman.xyz/state    # holdings now read from chain
 - A new receipt with real `executions[].tx_hash` (0x…) linking to BscScan.
 - `python verify_receipts.py` still `OK`; chain head matches `/verify` and the anchor tx.
 - Heartbeat fresh; `journalctl -u solvent.service` clean.
+
+## Recover an unresolved TWAK attempt
+
+The executor never blind-retries a value-moving call. If TWAK times out, exits
+without a parseable tx hash, or otherwise leaves a swap outcome unknown, the
+journal remains in `ATTEMPTED` and future sends halt until an operator reviews
+BSC wallet history.
+
+```bash
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.exec_recovery \
+  --data-dir /opt/solvent/data-live list-unresolved
+```
+
+If the transaction mined:
+
+```bash
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.exec_recovery \
+  --data-dir /opt/solvent/data-live mark-confirmed \
+  --key '<journal-key>' --tx-hash 0x... --mined-at 2026-06-22T20:05:00Z
+```
+
+If no matching successful swap exists:
+
+```bash
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.exec_recovery \
+  --data-dir /opt/solvent/data-live mark-failed \
+  --key '<journal-key>' --reason 'Checked BscScan and wallet history; no matching successful swap.'
+```
+
+This appends a terminal journal row only. It does not edit receipts and does not
+call TWAK.
 
 ## Rollback
 

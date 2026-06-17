@@ -1,6 +1,7 @@
 import pytest
 from eth_account import Account
 
+from solvent import run as run_mod
 from solvent.exec.executor import TwakExecutor
 from solvent.exec.livebook import LiveBook
 from solvent.run import build_live
@@ -35,5 +36,52 @@ def test_build_live_fails_fast_without_creds(tmp_path, monkeypatch, missing):
 
     _set_live_env(monkeypatch)
     monkeypatch.delenv(missing, raising=False)
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as exc:
         build_live(tmp_path, RiskConfig())
+    assert missing in str(exc.value)
+
+
+def test_main_live_refuses_paper_data_dir(tmp_path, monkeypatch):
+    (tmp_path / "paper-holdings.json").write_text("{}")
+    monkeypatch.setattr(
+        run_mod,
+        "build_live",
+        lambda *a, **k: pytest.fail("build_live should not be called"),
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "solvent.run",
+            "--mode",
+            "live",
+            "--data-dir",
+            str(tmp_path),
+            "--once",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        run_mod.main()
+
+    assert "paper-holdings.json" in str(exc.value)
+
+
+def test_main_once_returns_nonzero_when_cycle_fails(tmp_path, monkeypatch):
+    def fail_cycle(**_kwargs):
+        raise RuntimeError("cycle failed")
+
+    monkeypatch.setattr(run_mod, "run_cycle", fail_cycle)
+    monkeypatch.setattr(run_mod, "alert", lambda _message: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "solvent.run",
+            "--mode",
+            "paper",
+            "--data-dir",
+            str(tmp_path),
+            "--once",
+        ],
+    )
+
+    assert run_mod.main() == 1

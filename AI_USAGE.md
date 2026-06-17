@@ -5,6 +5,8 @@ AI tooling was used as an engineering assistant for:
 - Planning the Track 1 system architecture and risk posture.
 - Implementing and reviewing Python agent code, tests, ops units, and docs.
 - Auditing hackathon requirement alignment and submission readiness.
+- Running parallel codebase audits for live cutover safety and execution
+  recovery gaps.
 - Drafting README, runbook, demo, and submission copy.
 - Running local/VPS validation loops and interpreting failures.
 
