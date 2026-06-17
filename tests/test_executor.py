@@ -141,7 +141,8 @@ def test_nonzero_exit_marks_failed_not_confirmed(tmp_path, monkeypatch):
     ex, journal = _twak(tmp_path)
     result = ex.execute(_intent(), CYCLE)
     assert result.ok is False
-    assert journal.state_of(result.intent_key) == "FAILED"
+    assert journal.state_of(result.intent_key) == Journal.PENDING
+    assert journal.has_unresolved() is True
 
 
 def test_password_passed_via_env_not_argv(tmp_path, monkeypatch):

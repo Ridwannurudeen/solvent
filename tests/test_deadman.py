@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 
-from solvent.exec.executor import Journal, PaperExecutor
+from solvent.exec.executor import Journal, PaperExecutor, TwakExecutor
 from solvent.kernel.rules import RiskConfig
-from solvent.ops.deadman import run_deadman
+from solvent.ops.deadman import make_executor, run_deadman
 
 CFG = RiskConfig()
 # A fixed UTC day; hour chosen relative to the qualification deadline.
@@ -76,6 +76,14 @@ def test_independent_of_signals():
     params = set(inspect.signature(run_deadman).parameters)
     assert params == {"executor", "journal", "cfg", "now"}
     assert "source" not in params and "signals" not in params
+
+
+def test_live_mode_uses_twak_executor(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+    journal = _journal(tmp_path)
+    executor = make_executor("live", journal, CFG)
+    assert isinstance(executor, TwakExecutor)
+    assert executor.chain == "bsc"
 
 
 def _intent():

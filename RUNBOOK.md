@@ -6,10 +6,11 @@ already completed. The remaining live-production switch is still gated because
 it moves real money and must not mix live wallet accounting with the public
 paper-mode data directory.
 
-Host: `root@75.119.153.252`, agent runs as the **`solvent`** user, env file
-`/opt/solvent/solvent.env` (loaded by every systemd unit). The cycle unit runs
-`python -m solvent.run --mode ${SOLVENT_MODE} …`, so **flipping `SOLVENT_MODE`
-in that file is the live switch** — no unit edits.
+Host: `root@75.119.153.252`, agent runs as the **`solvent`** user, and every
+systemd unit loads `/opt/solvent/solvent.env`. Current unit templates read both
+`SOLVENT_MODE` and `SOLVENT_DATA_DIR`. For live mode, set `SOLVENT_DATA_DIR` to
+an isolated directory such as `/opt/solvent/data-live`; do not point live mode
+at the paper dashboard directory.
 
 Verified this session: TWAK CLI `v0.19.0` at `/usr/bin/twak` (on the `solvent`
 user's PATH); `twak swap FROM TO --usd N --chain bsc …` matches `executor.py`;
@@ -59,6 +60,8 @@ Send the rehearsal stake to the Step-1 address on **BSC mainnet**:
 
 ```bash
 sudo -u solvent -H twak wallet balance --chain bsc    # confirm funds landed
+# non-secret readiness report
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.preflight --data-dir "${SOLVENT_DATA_DIR:-/opt/solvent/data}"
 ```
 
 ## Step 3 — Register the ERC-8004 identity + first anchor (BSC mainnet)
@@ -108,17 +111,19 @@ If the quote returns sensible token addresses/amounts, add the live block to
 
 ```
 SOLVENT_MODE=live
+SOLVENT_DATA_DIR=/opt/solvent/data-live
 SOLVENT_PRIVATE_KEY=0x...
 SOLVENT_WALLET_PASSWORD=...
 SOLVENT_TRADE_NETWORK=bsc-mainnet
 SOLVENT_TWAK_CHAIN=bsc
+SOLVENT_WALLET_ADDRESS=0xE4fe23FB57dbb9AC2f685ea29B6b9A1409A0d359
 # (TWAK auth/wallet already configured from Step 1; TWAK_WALLET_PASSWORD is
 # optional when the `solvent` user's keychain is available)
 ```
 
-Before firing production live mode, reset or isolate the live data directory so
-paper-mode `state.json` does not create a false drawdown against real wallet
-equity.
+Live mode refuses to start against a data directory containing
+`paper-holdings.json`, unless `SOLVENT_ALLOW_LIVE_SHARED_DATA=1` is explicitly
+set. Do not set that override for the competition.
 
 Fire one live cycle immediately instead of waiting for the hourly timer:
 

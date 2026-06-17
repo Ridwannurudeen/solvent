@@ -1,13 +1,26 @@
 # AI Usage
 
-AI tooling was used during planning, implementation assistance, code review, documentation drafting, and test generation.
+AI tooling was used as an engineering assistant for:
 
-Human-controlled decisions included:
+- Planning the Track 1 system architecture and risk posture.
+- Implementing and reviewing Python agent code, tests, ops units, and docs.
+- Auditing hackathon requirement alignment and submission readiness.
+- Drafting README, runbook, demo, and submission copy.
+- Running local/VPS validation loops and interpreting failures.
 
-- Track selection and project framing.
-- Strategy risk posture and funding decisions.
-- Deployment approvals.
-- Whether to run on-chain transactions.
-- Final submission approval.
+Human-controlled decisions and actions:
 
-All code paths were reviewed, tested, and deployed through the repository's normal validation flow. The live agent keeps an auditable receipt trail so behavior can be inspected independently of how the code was written.
+- Track selection, project framing, and trading strategy approval.
+- Wallet funding, key custody, and any real on-chain transaction approval.
+- VPS deployment decisions and production live-mode cutover.
+- GitHub visibility, demo publication, social posts, and DoraHacks submission.
+
+Validation performed:
+
+- Python tests and lint checks are run before commits.
+- Live CMC/x402 and TWAK behavior is verified with isolated proof runs before
+  being described as working.
+- Public receipts are independently verifiable through `verify_receipts.py`.
+
+No AI attribution footers or co-author metadata are included in code, commits,
+or submission artifacts.

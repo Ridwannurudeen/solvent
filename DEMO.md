@@ -82,7 +82,7 @@ python verify_receipts.py
 # head: 0x...
 ```
 
-**VO:** "You don't have to take its word for it. This verifier is sixty lines of
+**VO:** "You don't have to take its word for it. This verifier is 51 lines of
 standard-library Python — it never touches the agent's code. It pulls the public
 log, recomputes every hash from scratch, and prints the head. It matches."
 
@@ -90,13 +90,14 @@ log, recomputes every hash from scratch, and prints the head. It matches."
 
 **Screen:** the **On-chain anchors** panel; click a day's tx to BscScan.
 
-**VO:** "And once a day that head hash is written on-chain under the agent's
-ERC-8004 identity. So the proof is end-to-end: public log, recomputed locally,
-committed on-chain. A self-custody user could actually audit this agent — and
-then trust it."
+**VO:** "And once a day the latest daily head is written on-chain under the
+agent's ERC-8004 identity. The current head keeps moving each hour; the anchor
+shows the last committed UTC day. So the proof is end-to-end: public log,
+recomputed locally, committed on-chain. A self-custody user could actually audit
+this agent — and then trust it."
 
 > Show ERC-8004 agent `136384`, the BSC mainnet anchor transaction, and the
-> matching head hash from `/verify`.
+> matching anchored-day head from `/state`.
 
 ## Close (3:25–3:30)
 

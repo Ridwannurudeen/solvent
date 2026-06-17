@@ -8,12 +8,12 @@
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="SOLVENT" />
 <meta property="og:title" content="SOLVENT · Verify it yourself" />
-<meta property="og:description" content="Recompute the entire decision chain with a 62-line standalone script and check it against the daily on-chain ERC-8004 anchors. No trust required." />
+<meta property="og:description" content="Recompute the entire decision chain with a 51-line standalone script and check it against the daily on-chain ERC-8004 anchors. No trust required." />
 <meta property="og:url" content="https://solvent.gudman.xyz/proof" />
 <meta property="og:image" content="https://solvent.gudman.xyz/og.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="SOLVENT · Verify it yourself" />
-<meta name="twitter:description" content="Recompute the entire decision chain with a 62-line standalone script and check it against the daily on-chain ERC-8004 anchors. No trust required." />
+<meta name="twitter:description" content="Recompute the entire decision chain with a 51-line standalone script and check it against the daily on-chain ERC-8004 anchors. No trust required." />
 <meta name="twitter:image" content="https://solvent.gudman.xyz/og.png" />
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="%23F0B90B" d="M16 3l4 4-4 4-4-4zM16 21l4 4-4 4-4-4zM7 12l4 4-4 4-4-4zM25 12l4 4-4 4-4-4zM16 12l4 4-4 4-4-4z"/></svg>' />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,6 +33,47 @@
   </div>
 
   <section class="section">
+    <div class="section-head"><h2>Mainnet evidence</h2><span class="note">registration, anchoring, execution, x402</span></div>
+    <div class="card scroll">
+      <table>
+        <thead><tr><th>Proof</th><th>Network</th><th>Evidence</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Track 1 registration</td>
+            <td class="mono dim">BSC mainnet</td>
+            <td><a class="mono" href="https://bscscan.com/tx/0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a" target="_blank" rel="noopener">0xc4cdba12...d31bda3a</a></td>
+            <td><span class="up">registered</span></td>
+          </tr>
+          <tr>
+            <td>ERC-8004 identity</td>
+            <td class="mono dim">BSC mainnet</td>
+            <td><a class="mono" href="https://bscscan.com/tx/0xda8461a78cc715964a8d653a6cf8a1968119516e443475f6ef5ca46c4eaa90b6" target="_blank" rel="noopener">0xda8461a7...4eaa90b6</a></td>
+            <td><span class="up">agent #136384</span></td>
+          </tr>
+          <tr>
+            <td>Daily receipt anchor</td>
+            <td class="mono dim">BSC mainnet</td>
+            <td><a class="mono" href="https://bscscan.com/tx/0x01a50c38abfc5b577683b80d680b7a9e5e6c81e30cdcd0d81689c69afa1104ba" target="_blank" rel="noopener">0x01a50c38...fa1104ba</a></td>
+            <td><span class="up">2026-06-16 head anchored</span></td>
+          </tr>
+          <tr>
+            <td>TWAK live rehearsal</td>
+            <td class="mono dim">BSC mainnet</td>
+            <td><a class="mono" href="https://bscscan.com/tx/0x2254bf01ea6bfa8d610c9bed916dbf19ec6db81d6068f1e0b0802a58cad50ac4" target="_blank" rel="noopener">0x2254bf01...8cad50ac4</a></td>
+            <td><span class="up">real swap tx</span></td>
+          </tr>
+          <tr>
+            <td>CMC x402 receipt</td>
+            <td class="mono dim">BSC mainnet data payment</td>
+            <td class="mono">0x282364a9...f89ba744</td>
+            <td><span class="up">$0.03 paid data, chain verified</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
     <div class="section-head"><h2>Verify it yourself</h2><span class="note">no trust required</span></div>
     <div class="verify-grid">
       <div class="card card-pad verify-card">
@@ -42,7 +83,7 @@
       </div>
       <div class="card card-pad verify-card">
         <h3><span class="n">2 ·</span> Recompute it independently</h3>
-        <p>A 62-line standard-library Python script — it never touches the agent's code. It pulls the log, recomputes every hash from genesis, and prints the head. Compare.</p>
+        <p>A 51-line standard-library Python script — it never touches the agent's code. It pulls the log, recomputes every hash from genesis, and prints the head. Compare.</p>
         <pre>curl -sO https://solvent.gudman.xyz/verify_receipts.py
 python verify_receipts.py
 <span class="c"># OK - N receipts, chain intact</span></pre>

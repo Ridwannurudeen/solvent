@@ -8,4 +8,4 @@ Type=oneshot
 User=solvent
 WorkingDirectory=/opt/solvent
 EnvironmentFile=/opt/solvent/solvent.env
-ExecStart=/opt/solvent/.venv/bin/python -m solvent.ops.deadman --mode ${SOLVENT_MODE} --data-dir /opt/solvent/data
+ExecStart=/opt/solvent/.venv/bin/python -m solvent.ops.deadman --mode ${SOLVENT_MODE} --data-dir ${SOLVENT_DATA_DIR}

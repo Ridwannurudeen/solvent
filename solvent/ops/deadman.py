@@ -18,10 +18,11 @@ when every data feed (and the hourly cycle) is down.
 import argparse
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..exec.executor import Journal, PaperExecutor
+from ..exec.executor import Journal, PaperExecutor, TwakExecutor
 from ..kernel.allocator import IntentKind, TradeIntent
 from ..kernel.rules import RiskConfig
 from .alerts import alert
@@ -70,6 +71,17 @@ def run_deadman(
     }
 
 
+def make_executor(mode: str, journal: Journal, cfg: RiskConfig):
+    if mode == "paper":
+        return PaperExecutor(journal)
+    return TwakExecutor(
+        journal,
+        password=os.environ.get("TWAK_WALLET_PASSWORD"),
+        chain=os.environ.get("SOLVENT_TWAK_CHAIN", "bsc"),
+        slippage_pct=cfg.max_slippage_pct,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=["paper", "live"], required=True)
@@ -81,14 +93,10 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
 
-    if args.mode == "live":
-        raise SystemExit(
-            "live mode is enabled in Phase 2 (needs TWAK credentials + funded wallet)"
-        )
-
+    cfg = RiskConfig()
     journal = Journal(args.data_dir / "journal.jsonl")
     summary = run_deadman(
-        executor=PaperExecutor(journal), journal=journal, cfg=RiskConfig()
+        executor=make_executor(args.mode, journal, cfg), journal=journal, cfg=cfg
     )
     logger.info("deadman: %s", summary)
     if summary["action"] == "qualify":

@@ -170,6 +170,11 @@ class TwakExecutor:
         except ValueError:
             pass
         ok = proc.returncode == 0 and tx_hash is not None
+        if not ok and proc.returncode != 0:
+            logger.error(
+                "twak exited nonzero after attempt; outcome UNKNOWN — halting further sends"
+            )
+            return ExecutionResult(key, False, tx_hash, out[:200])
         self.journal.mark_result(key, ok, tx_hash, out)
         return ExecutionResult(key, ok, tx_hash, out[:200])
 

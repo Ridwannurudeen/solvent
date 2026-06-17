@@ -11,6 +11,7 @@ def _set_live_env(monkeypatch):
     """Throwaway creds so build_live assembles offline — never broadcasts."""
     monkeypatch.setenv("SOLVENT_PRIVATE_KEY", Account.create().key.hex())
     monkeypatch.setenv("SOLVENT_WALLET_PASSWORD", "pw")
+    monkeypatch.setenv("SOLVENT_WALLET_ADDRESS", Account.create().address)
     monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-testnet")
 
 
@@ -27,7 +28,7 @@ def test_build_live_assembles_real_components(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     "missing",
-    ["SOLVENT_PRIVATE_KEY", "SOLVENT_WALLET_PASSWORD"],
+    ["SOLVENT_PRIVATE_KEY", "SOLVENT_WALLET_PASSWORD", "SOLVENT_WALLET_ADDRESS"],
 )
 def test_build_live_fails_fast_without_creds(tmp_path, monkeypatch, missing):
     from solvent.kernel.rules import RiskConfig

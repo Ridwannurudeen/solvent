@@ -9,6 +9,7 @@ UNITS=(
   solvent.service solvent.timer
   solvent-deadman.service solvent-deadman.timer
   solvent-watchdog.service solvent-watchdog.timer
+  solvent-web.service
   solvent-anchor.service solvent-anchor.timer
 )
 
@@ -23,8 +24,13 @@ if [[ ! -f "$APP/solvent.env" ]]; then
   echo "create $APP/solvent.env from ops/solvent-env.example first"; exit 1
 fi
 
+set -a
+source "$APP/solvent.env"
+set +a
+SOLVENT_DATA_DIR=${SOLVENT_DATA_DIR:-$APP/data}
+
 id -u solvent &>/dev/null || useradd -r -s /usr/sbin/nologin -d "$APP" solvent
-install -d -o solvent -g solvent "$APP/data"
+install -d -o solvent -g solvent "$SOLVENT_DATA_DIR"
 chown -R solvent:solvent "$APP"
 chmod 600 "$APP/solvent.env"
 
@@ -33,5 +39,10 @@ for u in "${UNITS[@]}"; do
 done
 
 systemctl daemon-reload
-systemctl enable --now solvent.timer solvent-deadman.timer solvent-watchdog.timer solvent-anchor.timer
+systemctl enable --now solvent-web.service solvent.timer solvent-deadman.timer solvent-watchdog.timer
+if [[ -n "${SOLVENT_AGENT_ID:-}" ]]; then
+  systemctl enable --now solvent-anchor.timer
+else
+  echo "SOLVENT_AGENT_ID is unset; leaving solvent-anchor.timer disabled until registration"
+fi
 systemctl list-timers 'solvent*' --no-pager

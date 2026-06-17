@@ -3,6 +3,7 @@
 # Run mode: paper (default) | live. Flip to live once the agent wallet is
 # funded and the live credentials are present on the host.
 SOLVENT_MODE=paper
+SOLVENT_DATA_DIR=/opt/solvent/data
 
 # Telegram alerts (BotFather token + chat id). Leave unset to disable.
 SOLVENT_TG_BOT_TOKEN=
@@ -22,7 +23,7 @@ SOLVENT_TG_CHAT_ID=
 # Trading network + TWAK chain id.
 # SOLVENT_TRADE_NETWORK=bsc-mainnet
 # SOLVENT_TWAK_CHAIN=bsc
-# SOLVENT_WALLET_ADDRESS=         # balance-read address; defaults to wallet's own
+# SOLVENT_WALLET_ADDRESS=         # required in live mode; the TWAK trading wallet
 
 # Regime brain (Claude advisor). Set to 1 to enable; needs ANTHROPIC_API_KEY.
 # SOLVENT_USE_ADVISOR=

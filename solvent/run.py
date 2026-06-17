@@ -114,9 +114,9 @@ def build_live(data_dir: Path, cfg: RiskConfig):
     Required env:
       SOLVENT_PRIVATE_KEY      agent wallet key (signs x402 data payments)
       SOLVENT_WALLET_PASSWORD  keystore password for the above
+      SOLVENT_WALLET_ADDRESS   TWAK trading wallet address to read balances from
     Optional env:
       TWAK_WALLET_PASSWORD     TWAK signing password; otherwise keychain fallback
-      SOLVENT_WALLET_ADDRESS   address to read balances from (default: wallet's own)
       SOLVENT_TRADE_NETWORK    bsc-mainnet (default) | bsc-testnet
       SOLVENT_TWAK_CHAIN       TWAK chain name (default: bsc)
     """
@@ -137,6 +137,7 @@ def build_live(data_dir: Path, cfg: RiskConfig):
 
     private_key = _require("SOLVENT_PRIVATE_KEY")
     wallet_password = _require("SOLVENT_WALLET_PASSWORD")
+    wallet_address = _require("SOLVENT_WALLET_ADDRESS")
     twak_password = os.environ.get("TWAK_WALLET_PASSWORD")
     network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
     twak_chain = os.environ.get("SOLVENT_TWAK_CHAIN", "bsc")
@@ -179,7 +180,6 @@ def build_live(data_dir: Path, cfg: RiskConfig):
         slippage_pct=cfg.max_slippage_pct,
     )
 
-    wallet_address = os.environ.get("SOLVENT_WALLET_ADDRESS") or wallet.address
     book = LiveBook(make_web3(network), wallet_address)
     return source, executor, journal, book
 
@@ -206,6 +206,13 @@ def main() -> int:
     advisor = make_advisor() if os.environ.get("SOLVENT_USE_ADVISOR") == "1" else None
 
     if args.mode == "live":
+        if (data_dir / "paper-holdings.json").exists() and os.environ.get(
+            "SOLVENT_ALLOW_LIVE_SHARED_DATA"
+        ) != "1":
+            raise SystemExit(
+                "live mode refuses a data directory containing paper-holdings.json; "
+                "set SOLVENT_DATA_DIR to an isolated live directory"
+            )
         source, executor, journal, book = build_live(data_dir, cfg)
 
         def holdings_now() -> dict[str, float]:
@@ -218,7 +225,7 @@ def main() -> int:
         def holdings_now() -> dict[str, float]:
             return dict(book.holdings)
 
-    def one_cycle() -> None:
+    def one_cycle() -> bool:
         try:
             summary = run_cycle(
                 source=source,
@@ -234,13 +241,14 @@ def main() -> int:
                 alert(f"SOLVENT [{args.mode}] {json.dumps(summary)}")
             heartbeat = data_dir / "heartbeat"
             heartbeat.write_text(datetime.now(timezone.utc).isoformat())
+            return True
         except Exception:
             logger.exception("cycle failed")
             alert(f"SOLVENT [{args.mode}] CYCLE FAILED — check logs")
+            return False
 
     if args.once:
-        one_cycle()
-        return 0
+        return 0 if one_cycle() else 1
     while True:
         one_cycle()
         time.sleep(args.loop)
