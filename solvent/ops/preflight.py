@@ -32,6 +32,17 @@ REQUIRED_LIVE_ENV = (
 )
 
 
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        raise SystemExit(f"env file not found: {path}")
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
 def _run(cmd: list[str], timeout: int = 30) -> dict:
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -97,6 +108,7 @@ def preflight(data_dir: Path, include_twak: bool = True) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--env-file", type=Path)
     parser.add_argument(
         "--data-dir",
         type=Path,
@@ -104,6 +116,11 @@ def main() -> int:
     )
     parser.add_argument("--skip-twak", action="store_true")
     args = parser.parse_args()
+    if args.env_file:
+        load_env_file(args.env_file)
+        default_dir = Path("/opt/solvent/data")
+        if args.data_dir == default_dir:
+            args.data_dir = Path(os.environ.get("SOLVENT_DATA_DIR", default_dir))
     print(
         json.dumps(preflight(args.data_dir, include_twak=not args.skip_twak), indent=2)
     )

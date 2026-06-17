@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from solvent.exec.executor import Journal
 from solvent.kernel.allocator import IntentKind, TradeIntent
-from solvent.ops.preflight import preflight
+from solvent.ops.preflight import load_env_file, preflight
 
 
 def _intent():
@@ -34,3 +34,21 @@ def test_preflight_reports_non_secret_env_and_journal(tmp_path, monkeypatch):
     assert report["paper_data_in_dir"] is True
     assert report["journal_has_unresolved"] is True
     assert "twak" not in report
+
+
+def test_load_env_file_sets_presence_without_output(tmp_path, monkeypatch):
+    monkeypatch.delenv("SOLVENT_PRIVATE_KEY", raising=False)
+    env_file = tmp_path / "solvent.env"
+    env_file.write_text(
+        "SOLVENT_MODE=live\n"
+        "SOLVENT_PRIVATE_KEY='not-printed'\n"
+        "SOLVENT_DATA_DIR=/tmp/solvent-live\n"
+    )
+
+    load_env_file(env_file)
+    report = preflight(tmp_path, include_twak=False)
+
+    assert report["env"]["mode"] == "live"
+    assert report["env"]["required_live"]["SOLVENT_PRIVATE_KEY"] is True
+    assert report["env"]["data_dir"] == "/tmp/solvent-live"
+    assert "not-printed" not in str(report)

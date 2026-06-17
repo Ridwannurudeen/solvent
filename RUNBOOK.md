@@ -61,7 +61,7 @@ Send the rehearsal stake to the Step-1 address on **BSC mainnet**:
 ```bash
 sudo -u solvent -H twak wallet balance --chain bsc    # confirm funds landed
 # non-secret readiness report
-sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.preflight --data-dir "${SOLVENT_DATA_DIR:-/opt/solvent/data}"
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.preflight --env-file /opt/solvent/solvent.env
 ```
 
 ## Step 3 — Register the ERC-8004 identity + first anchor (BSC mainnet)
