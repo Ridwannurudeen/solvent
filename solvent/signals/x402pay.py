@@ -38,6 +38,9 @@ TOKEN_DECIMALS = {
     ("eip155:56", "0xcE24439F2D9C6a2289F741120FE202248B666666"): 18,
     ("eip155:56", "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d"): 18,
 }
+BSC_USD1 = "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d"
+BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+BSC_UNITED_STABLES = "0xcE24439F2D9C6a2289F741120FE202248B666666"
 
 EIP3009_TYPE_FIELDS = [
     {"name": "from", "type": "address"},
@@ -99,16 +102,25 @@ def parse_payment_required(header_b64: str) -> list[PaymentOffer]:
 def choose_offer(
     offers: list[PaymentOffer],
     preferred_networks: tuple[str, ...] = ("eip155:56", "eip155:8453"),
+    preferred_assets: tuple[str, ...] = (BSC_USD1, BASE_USDC, BSC_UNITED_STABLES),
 ) -> PaymentOffer:
-    """First EIP-3009 offer in preferred-network order.
+    """First EIP-3009 offer in preferred-network/asset order.
 
     permit2-exact requires an on-chain Permit2 approval step; eip3009 is
     a pure signature, so it is the only method we implement.
     """
     for net in preferred_networks:
-        for offer in offers:
-            if offer.network == net and offer.method == "eip3009":
-                return offer
+        network_offers = [
+            offer
+            for offer in offers
+            if offer.network == net and offer.method == "eip3009"
+        ]
+        for asset in preferred_assets:
+            for offer in network_offers:
+                if offer.asset.lower() == asset.lower():
+                    return offer
+        if network_offers:
+            return network_offers[0]
     raise ValueError(
         f"no eip3009 offer on preferred networks; got "
         f"{[(o.network, o.method) for o in offers]}"
@@ -215,8 +227,10 @@ class X402MCPClient:
             resp = self._post(body, headers={"PAYMENT-SIGNATURE": header})
             cost = offer.cost_usd
         ok = resp.status_code == 200
+        result = resp.json().get("result") if ok else None
+        if isinstance(result, dict) and result.get("isError"):
+            ok = False
         purchase = DataPurchase(tool=name, cost_usdc=cost if ok else 0.0, ok=ok)
         if not ok:
             return None, purchase
-        result = resp.json().get("result")
         return result, purchase

@@ -94,7 +94,7 @@ SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet SOLVENT_AGENT_ID=...
 
 ## Data & x402 spend metering
 
-Signals come from the data layer (paper mode: free Binance tickers + alternative.me Fear & Greed; live mode: CoinMarketCap x402 keyless endpoints). Every paid call is recorded in the receipt's `data_purchases` with its USDC cost, and a session budget + per-call cap live in `RiskConfig` (`x402_session_budget_usdc`, `x402_max_per_call_usdc`). The point is honest metering surfaced per decision — not a performance claim.
+Signals come from the data layer (paper mode: free Binance tickers + alternative.me Fear & Greed; live mode: CoinMarketCap x402 keyless endpoints). Every paid call is recorded in the receipt's `data_purchases` with its USD cost, and a session budget + per-call cap live in `RiskConfig` (`x402_session_budget_usdc`, `x402_max_per_call_usdc`). The point is honest metering surfaced per decision — not a performance claim. On BSC, SOLVENT prefers CMC's USD1 EIP-3009 offer because BSC USDC is currently permit2-only.
 
 ## Run it
 
@@ -102,7 +102,7 @@ Requires Python ≥ 3.12.
 
 ```bash
 pip install -e .
-python -m pytest -q                                   # 108 tests
+python -m pytest -q                                   # 115 tests
 python -m solvent.run --mode paper --data-dir ./data --once     # one cycle
 python -m solvent.run --mode paper --data-dir ./data --loop 3600  # hourly
 python -m solvent.receipts.server --data-dir ./data --port 3078   # serve the glass box
@@ -113,10 +113,10 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units). **114 tests, ruff-clean.**
+- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units). **115 tests, ruff-clean.**
 - **Live now:** paper agent running hourly on a VPS with the dashboard public at solvent.gudman.xyz; receipts accumulating autonomously; ERC-8004 identity `136384` and daily anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
-- **Live mode wired (credential-gated):** `--mode live` assembles the real stack — CMC x402 paid signals (`CMCSource`), TWAK execution (`TwakExecutor`), and on-chain balance reads (`LiveBook`) — and fails fast if `SOLVENT_PRIVATE_KEY` / `SOLVENT_WALLET_PASSWORD` / `TWAK_WALLET_PASSWORD` are absent, so it cannot broadcast without explicit credentials. TWAK auth/wallet/keychain, quote-only swaps, ERC-8004 registration, and the daily anchor timer are verified on BSC mainnet. Remaining live-trading gates: rotate exposed TWAK API credentials, fund the wallet with in-scope floor stables, run `twak compete register` with explicit approval, and flip `SOLVENT_MODE=live`.
+- **Live mode wired (credential-gated):** `--mode live` assembles the real stack — CMC x402 paid signals (`CMCSource`), TWAK execution (`TwakExecutor`), and on-chain balance reads (`LiveBook`) — and fails fast without the x402 signer key plus TWAK wallet/keychain access. TWAK auth/wallet/keychain, quote-only swaps, ERC-8004 registration, Track 1 registration, the daily anchor timer, and an isolated $2 mainnet live rehearsal are verified on BSC mainnet. Remaining live-production gates: keep the x402 signer funded with BSC USD1, reset or isolate live accounting state, and explicitly flip `SOLVENT_MODE=live`.
 
 ## BNB Hack alignment
 
@@ -126,7 +126,7 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 | Reads markets via CMC | Live mode uses `CMCSource` through the x402 MCP client, with `get_global_metrics_latest`, `get_crypto_quotes_latest`, and conditional derivatives metrics recorded per receipt. |
 | Signs/executes via TWAK | `TwakExecutor` is the only live execution path; quote-only BSC swaps are verified on the VPS. |
 | User-defined rules | Risk constitution enforces allowlist, one-position cap, floor reserve, per-trade sizing, slippage, stop, drawdown kill switch, and lock-in ratchet. |
-| Live BSC trading week | Ready after stablecoin funding, key rotation, and the explicit live-mode flip. |
+| Live BSC trading week | Registered and live-rehearsed; ready after x402 signer USD1 funding, live-accounting cutover, and the explicit live-mode flip. |
 | On-chain Track 1 registration | Registered in the BNB Hack competition contract: `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`. |
 | On-chain proof | ERC-8004 agent `136384` on BSC mainnet with a live daily receipt-chain anchor. |
 | Submission package | Public repo and demo video are still required before DoraHacks submission; repo remains private until explicitly approved for publication. |

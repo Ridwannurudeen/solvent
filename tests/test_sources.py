@@ -10,6 +10,7 @@ receipt's data_purchases.
 
 from solvent.receipts.chain import DataPurchase
 from solvent.signals.sources import (
+    CMC_QUOTE_IDS,
     CMCSource,
     _extract_quote_fields,
     _iter_quotes,
@@ -60,7 +61,7 @@ class FakeClient:
         self.calls = []
 
     def call_tool(self, name, arguments=None):
-        self.calls.append(name)
+        self.calls.append((name, arguments or {}))
         if name in self.fail:
             return None, DataPurchase(tool=name, cost_usdc=0.0, ok=False)
         return {"structuredContent": self.responses.get(name)}, DataPurchase(
@@ -93,7 +94,8 @@ def test_fetch_happy_path_parses_signals_and_meters_cost():
     assert signals.prices["CAKE"] == 2.5
     assert signals.momentum["CAKE"] == momentum_score(3.0, 5.0)
     # fear_greed 60 >= 45 -> anomaly tier (derivatives) fetched.
-    assert "get_global_crypto_derivatives_metrics" in client.calls
+    assert ("get_global_crypto_derivatives_metrics", {}) in client.calls
+    assert ("get_crypto_quotes_latest", {"id": CMC_QUOTE_IDS}) in client.calls
     assert signals.btc_funding_rate == 0.0002
     # every paid call is metered into the receipt.
     assert [p.cost_usdc for p in purchases] == [0.01, 0.01, 0.01]
@@ -118,6 +120,6 @@ def test_neutral_fear_greed_skips_anomaly_tier():
     # 40 is neither >=45 nor <=25 -> no derivatives call, funding stays None.
     client = FakeClient(_responses(fng=40))
     signals, purchases = CMCSource(client).fetch()
-    assert "get_global_crypto_derivatives_metrics" not in client.calls
+    assert ("get_global_crypto_derivatives_metrics", {}) not in client.calls
     assert signals.btc_funding_rate is None
     assert len(purchases) == 2  # base tier only

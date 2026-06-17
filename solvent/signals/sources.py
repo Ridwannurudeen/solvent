@@ -34,9 +34,37 @@ def momentum_score(pc_24h: float, pc_7d: float) -> float:
     return 0.6 * pc_24h + 0.4 * pc_7d
 
 
+CMC_IDS = {
+    "ETH": 1027,
+    "XRP": 52,
+    "DOGE": 74,
+    "ADA": 2010,
+    "LINK": 1975,
+    "LTC": 2,
+    "AVAX": 5805,
+    "DOT": 6636,
+    "UNI": 7083,
+    "BCH": 1831,
+    "CAKE": 7186,
+    "TWT": 5964,
+    "FLOKI": 10804,
+    "SHIB": 5994,
+    "FET": 3773,
+    "INJ": 7226,
+    "PENDLE": 9481,
+    "AAVE": 7278,
+    "ETC": 1321,
+    "FIL": 2280,
+    "ATOM": 3794,
+}
+CMC_QUOTE_IDS = ",".join(str(CMC_IDS[s]) for s in SLEEVE_SYMBOLS if s in CMC_IDS)
+
+
 def _mcp_json(result: dict | None) -> dict | list | None:
     """Unwrap an MCP tools/call result into its JSON payload."""
     if not result:
+        return None
+    if result.get("isError"):
         return None
     if isinstance(result.get("structuredContent"), (dict, list)):
         return result["structuredContent"]
@@ -81,7 +109,7 @@ class CMCSource:
 
         # ── Base tier: sleeve-universe quotes ───────────────────────
         q_raw, p = self.client.call_tool(
-            "get_crypto_quotes_latest", {"symbol": ",".join(SLEEVE_SYMBOLS)}
+            "get_crypto_quotes_latest", {"id": CMC_QUOTE_IDS}
         )
         purchases.append(p)
         quotes = _mcp_json(q_raw)

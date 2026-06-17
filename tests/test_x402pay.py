@@ -11,8 +11,10 @@ from bnbagent.wallets import EVMWalletProvider
 from bnbagent.x402 import X402Signer
 
 from solvent.signals.x402pay import (
+    BSC_USD1,
     EIP3009_TYPE_FIELDS,
     PaymentOffer,
+    X402MCPClient,
     X402Payer,
     choose_offer,
     parse_payment_required,
@@ -39,6 +41,7 @@ def test_choose_prefers_bsc_eip3009():
     offer = choose_offer(parse_payment_required(fixture_header()))
     assert offer.network == "eip155:56"
     assert offer.method == "eip3009"
+    assert offer.asset == BSC_USD1
 
 
 def test_choose_falls_back_to_base():
@@ -58,6 +61,42 @@ def test_choose_rejects_permit2_only():
     ]
     with pytest.raises(ValueError):
         choose_offer(offers)
+
+
+class _FakeResponse:
+    def __init__(self, status_code, body=None, headers=None):
+        self.status_code = status_code
+        self._body = body or {}
+        self.headers = headers or {}
+
+    def json(self):
+        return self._body
+
+
+class _DummyPayer:
+    def payment_header(self, offer, resource):
+        return "paid"
+
+
+class _ToolErrorClient(X402MCPClient):
+    def __init__(self):
+        super().__init__(payer=_DummyPayer())
+        self._responses = [
+            _FakeResponse(402, headers={"PAYMENT-REQUIRED": fixture_header()}),
+            _FakeResponse(200, {"result": {"content": [], "isError": True}}),
+        ]
+
+    def _post(self, body, headers=None):
+        return self._responses.pop(0)
+
+
+def test_paid_tool_level_error_is_failed_purchase():
+    result, purchase = _ToolErrorClient().call_tool("get_global_metrics_latest", {})
+
+    assert result is None
+    assert purchase.tool == "get_global_metrics_latest"
+    assert purchase.ok is False
+    assert purchase.cost_usdc == 0.0
 
 
 # ── End-to-end signing with a throwaway key ───────────────────────────

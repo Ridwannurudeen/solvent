@@ -1,8 +1,10 @@
 # SOLVENT — go-live runbook
 
-The build is done and running in **paper** mode on the VPS. Going live is four
-operational steps — all of which move real money or create on-chain state, so
-each is gated on an explicit decision. Nothing here has been executed yet.
+The build is running in **paper** mode on the public VPS, with BSC mainnet
+identity, anchoring, Track 1 registration, and one isolated live rehearsal
+already completed. The remaining live-production switch is still gated because
+it moves real money and must not mix live wallet accounting with the public
+paper-mode data directory.
 
 Host: `root@75.119.153.252`, agent runs as the **`solvent`** user, env file
 `/opt/solvent/solvent.env` (loaded by every systemd unit). The cycle unit runs
@@ -51,6 +53,9 @@ TWAK_HMAC_SECRET=...
 Send the rehearsal stake to the Step-1 address on **BSC mainnet**:
 - ~$50 in a floor stable (USDT) for the rehearsal; top up to ~$300 for the scored week.
 - ~$5 of BNB for gas (swaps cost ~$0.006 each; the binding cost is the ~0.25% DEX fee).
+- A small BSC USD1 balance on the x402 signing wallet for paid CMC calls. The
+  CMC MCP challenge offers BSC EIP-3009 settlement in USD1; Binance-Peg USDC on
+  BSC is currently permit2-only, which SOLVENT does not sign.
 
 ```bash
 sudo -u solvent -H twak wallet balance --chain bsc    # confirm funds landed
@@ -92,8 +97,7 @@ Expected result: `registered: true` for
 
 ## Step 5 — Pre-flight, then flip to live
 
-**Pre-flight (no broadcast)** — confirm TWAK resolves bare symbols on BSC; this
-was the one thing untestable without creds:
+**Pre-flight (no broadcast)** — confirm TWAK resolves bare symbols on BSC:
 
 ```bash
 sudo -u solvent -H twak swap USDT USDC --usd 1 --chain bsc --quote-only --json
@@ -111,6 +115,10 @@ SOLVENT_TWAK_CHAIN=bsc
 # (TWAK auth/wallet already configured from Step 1; TWAK_WALLET_PASSWORD is
 # optional when the `solvent` user's keychain is available)
 ```
+
+Before firing production live mode, reset or isolate the live data directory so
+paper-mode `state.json` does not create a false drawdown against real wallet
+equity.
 
 Fire one live cycle immediately instead of waiting for the hourly timer:
 
