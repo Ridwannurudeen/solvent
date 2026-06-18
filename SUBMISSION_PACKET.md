@@ -37,6 +37,18 @@ on-chain under ERC-8004 agent `136384`.
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
 - Evidence page: https://solvent.gudman.xyz/proof
 
+## Readiness Command
+
+```bash
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.readiness \
+  --env-file /opt/solvent/solvent.env --profile submission
+```
+
+The submission profile checks public `/verify`, `/state`, `/proof`, local
+receipt-chain integrity, unresolved execution attempts, and non-secret env
+presence. Approval-gated items are reported separately and do not trigger
+automation.
+
 ## On-chain Proof
 
 - Agent wallet: `0xE4fe23FB57dbb9AC2f685ea29B6b9A1409A0d359`

@@ -15,6 +15,16 @@ at the paper dashboard directory.
 The concise cutover checklist is in `LIVE_CUTOVER.md`; this runbook keeps the
 full setup and recovery context.
 
+For no-broadcast readiness checks, use:
+
+```bash
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.readiness \
+  --env-file /opt/solvent/solvent.env --profile submission
+```
+
+Use `--profile live` only for the strict scored-week cutover gate; it requires
+an isolated live data directory and all live env presence checks.
+
 Verified this session: TWAK CLI `v0.19.0` at `/usr/bin/twak` (on the `solvent`
 user's PATH); `twak swap FROM TO --usd N --chain bsc …` matches `executor.py`;
 `twak auth status`, `twak wallet status`, `twak wallet keychain check`, and

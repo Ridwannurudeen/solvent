@@ -13,6 +13,7 @@ Run these from the VPS as the `solvent` user:
 ```bash
 cd /opt/solvent
 sudo -u solvent -H .venv/bin/python -m solvent.ops.preflight --env-file /opt/solvent/solvent.env
+sudo -u solvent -H .venv/bin/python -m solvent.ops.readiness --env-file /opt/solvent/solvent.env --profile live
 sudo -u solvent -H .venv/bin/python -m solvent.ops.exec_recovery --data-dir /opt/solvent/data-live list-unresolved
 sudo -u solvent -H twak compete status
 sudo -u solvent -H twak wallet balance --chain bsc --json
@@ -62,6 +63,7 @@ sudo systemctl stop solvent.timer
 sudo systemctl start solvent.service
 journalctl -u solvent.service -n 80 --no-pager
 sudo -u solvent -H .venv/bin/python -m solvent.ops.preflight --env-file /opt/solvent/solvent.env
+sudo -u solvent -H .venv/bin/python -m solvent.ops.readiness --env-file /opt/solvent/solvent.env --profile live
 curl -s https://solvent.gudman.xyz/state
 curl -s https://solvent.gudman.xyz/verify
 ```
