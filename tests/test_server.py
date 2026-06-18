@@ -114,8 +114,34 @@ def test_state_reports_holdings_and_liveness(tmp_path):
     assert s["peak_equity_usd"] == 312.0
     assert s["position"]["symbol"] == "CAKE"
     assert s["holdings"]["USDT"] == 240.0
+    assert s["holdings_source"] == "paper"
+    assert s["holdings_error"] is None
     assert s["alive"] is True
     assert s["heartbeat_age_s"] is not None and s["heartbeat_age_s"] < 60
+
+
+def test_state_reads_live_holdings_when_live_and_no_paper_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_MODE", "live")
+    (tmp_path / "state.json").write_text(json.dumps({"position": {"symbol": "CAKE"}}))
+
+    s = state(tmp_path, live_reader=lambda position: {"USDT": 40.0, "CAKE": 2.0})
+
+    assert s["holdings"] == {"USDT": 40.0, "CAKE": 2.0}
+    assert s["holdings_source"] == "live"
+    assert s["holdings_error"] is None
+
+
+def test_state_reports_live_holdings_error_without_failing(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_MODE", "live")
+
+    def fail(_position):
+        raise RuntimeError("rpc unavailable")
+
+    s = state(tmp_path, live_reader=fail)
+
+    assert s["holdings"] == {}
+    assert s["holdings_source"] == "live-error"
+    assert s["holdings_error"] == "rpc unavailable"
 
 
 def test_state_stale_heartbeat_not_alive(tmp_path):

@@ -11,6 +11,7 @@ import argparse
 import json
 import logging
 import os
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -38,7 +39,38 @@ def _read_json(path: Path, default: object) -> object:
     return json.loads(path.read_text())
 
 
-def state(data_dir: Path) -> dict:
+def _live_holdings(position: dict | None) -> dict[str, float]:
+    from ..exec.livebook import LiveBook, make_web3
+
+    wallet = os.environ.get("SOLVENT_WALLET_ADDRESS")
+    if not wallet:
+        return {}
+    network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+    position_symbol = position.get("symbol") if position else None
+    return LiveBook(make_web3(network), wallet).snapshot(position_symbol)
+
+
+def _holdings(
+    data_dir: Path,
+    position: dict | None,
+    live_reader: Callable[[dict | None], dict[str, float]],
+) -> tuple[dict[str, float], str, str | None]:
+    paper_path = data_dir / "paper-holdings.json"
+    if paper_path.exists():
+        return _read_json(paper_path, {}), "paper", None
+    if os.environ.get("SOLVENT_MODE") != "live":
+        return {}, "none", None
+    try:
+        return live_reader(position), "live", None
+    except Exception as exc:
+        return {}, "live-error", str(exc)[:200]
+
+
+def state(
+    data_dir: Path,
+    *,
+    live_reader: Callable[[dict | None], dict[str, float]] = _live_holdings,
+) -> dict:
     """Live portfolio + liveness snapshot — the barbell's current shape.
 
     Reads the same files the cycle writes (state.json, paper-holdings.json,
@@ -46,7 +78,10 @@ def state(data_dir: Path) -> dict:
     for that). Purely read-only, no secrets.
     """
     st = _read_json(data_dir / "state.json", {})
-    holdings = _read_json(data_dir / "paper-holdings.json", {})
+    position = st.get("position")
+    holdings, holdings_source, holdings_error = _holdings(
+        data_dir, position, live_reader
+    )
     age = heartbeat_age(data_dir)
     cfg = RiskConfig()
     anchors_raw = _read_json(data_dir / "anchors.json", {})
@@ -66,8 +101,10 @@ def state(data_dir: Path) -> dict:
     return {
         "start_equity_usd": st.get("start_equity_usd"),
         "peak_equity_usd": st.get("peak_equity_usd"),
-        "position": st.get("position"),
+        "position": position,
         "holdings": holdings,
+        "holdings_source": holdings_source,
+        "holdings_error": holdings_error,
         "heartbeat_age_s": age,
         "alive": age is not None and age < ALIVE_MAX_AGE_S,
         "anchors": anchors,
