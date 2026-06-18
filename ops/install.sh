@@ -6,7 +6,7 @@ set -euo pipefail
 
 APP=/opt/solvent
 UNITS=(
-  solvent.service solvent.timer
+  solvent.service solvent.timer solvent-scan.timer
   solvent-deadman.service solvent-deadman.timer
   solvent-watchdog.service solvent-watchdog.timer
   solvent-web.service
@@ -40,6 +40,7 @@ done
 
 systemctl daemon-reload
 systemctl enable --now solvent-web.service solvent.timer solvent-deadman.timer solvent-watchdog.timer
+echo "solvent-scan.timer installed but not enabled; use it instead of solvent.timer for 5-minute scanning."
 if [[ -n "${SOLVENT_AGENT_ID:-}" ]]; then
   systemctl enable --now solvent-anchor.timer
 else

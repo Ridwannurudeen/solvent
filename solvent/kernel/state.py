@@ -16,6 +16,8 @@ class SleevePosition:
     entry_momo_score: float
     notional_usd: float
     opened_at: datetime
+    high_price_usd: float = 0.0
+    profit_taken: bool = False
 
 
 @dataclass(frozen=True)
@@ -69,5 +71,9 @@ class MarketSignals:
     momentum: dict[str, float] = field(default_factory=dict)
     # symbol -> latest USD price for everything we may touch.
     prices: dict[str, float] = field(default_factory=dict)
+    percent_change_1h: dict[str, float] = field(default_factory=dict)
+    volume_change_24h: dict[str, float] = field(default_factory=dict)
+    volume_24h_usd: dict[str, float] = field(default_factory=dict)
+    market_cap_usd: dict[str, float] = field(default_factory=dict)
     # True when any feed is stale/failed — forces fail-frozen behavior.
     degraded: bool = False

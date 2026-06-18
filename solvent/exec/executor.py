@@ -37,6 +37,19 @@ def intent_key(intent: TradeIntent, cycle_id: str) -> str:
     )
 
 
+def intent_payload(intent: TradeIntent, cycle_id: str) -> dict:
+    """Canonical intent payload committed before execution."""
+    return {
+        "key": intent_key(intent, cycle_id),
+        "cycle_id": cycle_id,
+        "kind": intent.kind.value,
+        "from": intent.from_symbol,
+        "to": intent.to_symbol,
+        "notional_usd": round(intent.notional_usd, 2),
+        "reason": intent.reason,
+    }
+
+
 class Journal:
     """Append-only JSONL execution journal (also drives trades_today /
     qualified_today in PortfolioState)."""

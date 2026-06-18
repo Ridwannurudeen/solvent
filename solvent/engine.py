@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .exec.executor import ExecutionResult, Journal
+from .exec.executor import ExecutionResult, Journal, intent_key, intent_payload
 from .kernel.allocator import (
     IntentKind,
     TradeIntent,
@@ -61,6 +61,8 @@ class StateStore:
             return None
         p = dict(self.position)
         p["opened_at"] = datetime.fromisoformat(p["opened_at"])
+        p.setdefault("high_price_usd", p.get("entry_price_usd", 0.0))
+        p.setdefault("profit_taken", False)
         return SleevePosition(**p)
 
 
@@ -96,6 +98,7 @@ def run_cycle(
     holdings: dict[str, float],
     cfg: RiskConfig,
     advisor=None,
+    pretrade_publisher=None,
     now: datetime | None = None,
 ) -> dict:
     """One full decision cycle. Returns a summary dict (for logs/alerts)."""
@@ -105,6 +108,7 @@ def run_cycle(
 
     signals, purchases = source.fetch()
     equity, floor = compute_equity(holdings, signals, cfg.floor_symbols)
+    _sync_position_notional(store, holdings, signals)
 
     if store.start_equity_usd <= 0 and equity > 0:
         store.start_equity_usd = equity
@@ -133,6 +137,7 @@ def run_cycle(
         if advice is not None
         else deterministic_regime
     )
+    regime = effective_regime.value
 
     intents: list[TradeIntent] = decide(
         state, signals, cfg, regime_override=effective_regime
@@ -143,19 +148,91 @@ def run_cycle(
 
     executions: list[ExecutionResult] = []
     for intent in intents:
+        key = intent_key(intent, cycle_id)
+        payload = intent_payload(intent, cycle_id)
+        pre_trade = receipts.append(
+            ts=now.isoformat(),
+            phase="pre_trade_commit",
+            cycle_id=cycle_id,
+            intent_key=key,
+            signals={
+                "fear_greed": signals.fear_greed,
+                "btc_funding_rate": signals.btc_funding_rate,
+                "momentum": {k: round(v, 3) for k, v in signals.momentum.items()},
+                "percent_change_1h": {
+                    k: round(v, 3) for k, v in signals.percent_change_1h.items()
+                },
+                "volume_change_24h": {
+                    k: round(v, 3) for k, v in signals.volume_change_24h.items()
+                },
+                "volume_24h_usd": {
+                    k: round(v, 2) for k, v in signals.volume_24h_usd.items()
+                },
+                "market_cap_usd": {
+                    k: round(v, 2) for k, v in signals.market_cap_usd.items()
+                },
+                "degraded": signals.degraded,
+                "regime_deterministic": deterministic_regime.value,
+            },
+            regime=regime,
+            thesis=intent.reason,
+            intents=[payload],
+            executions=[],
+            equity_usd=round(equity, 2),
+            dq_headroom_pct=round(state.dq_headroom_pct, 4),
+        )
+        pre_trade_anchor_tx_hash = None
+        if pretrade_publisher is not None:
+            pre_trade_anchor_tx_hash = pretrade_publisher.publish(
+                cycle_id=cycle_id, intent_key=key, commit_hash=pre_trade.hash
+            )
         result = executor.execute(intent, cycle_id)
         executions.append(result)
+        receipts.append(
+            ts=now.isoformat(),
+            phase="execution_seal",
+            cycle_id=cycle_id,
+            intent_key=key,
+            pre_trade_hash=pre_trade.hash,
+            regime=regime,
+            thesis=result.detail[:200],
+            intents=[payload],
+            executions=[
+                {"key": result.intent_key, "ok": result.ok, "tx_hash": result.tx_hash}
+            ],
+            execution_seal={
+                "ok": result.ok,
+                "tx_hash": result.tx_hash,
+                "pre_trade_anchor_tx_hash": pre_trade_anchor_tx_hash,
+                "detail": result.detail[:500],
+            },
+            equity_usd=round(equity, 2),
+            dq_headroom_pct=round(state.dq_headroom_pct, 4),
+        )
         if result.ok:
             _apply_position_effect(store, intent, signals)
 
-    regime = effective_regime.value
     receipt = receipts.append(
         ts=now.isoformat(),
+        phase="cycle_summary",
+        cycle_id=cycle_id,
         data_purchases=purchases,
         signals={
             "fear_greed": signals.fear_greed,
             "btc_funding_rate": signals.btc_funding_rate,
             "momentum": {k: round(v, 3) for k, v in signals.momentum.items()},
+            "percent_change_1h": {
+                k: round(v, 3) for k, v in signals.percent_change_1h.items()
+            },
+            "volume_change_24h": {
+                k: round(v, 3) for k, v in signals.volume_change_24h.items()
+            },
+            "volume_24h_usd": {
+                k: round(v, 2) for k, v in signals.volume_24h_usd.items()
+            },
+            "market_cap_usd": {
+                k: round(v, 2) for k, v in signals.market_cap_usd.items()
+            },
             "degraded": signals.degraded,
             "regime_deterministic": deterministic_regime.value,
             "advisor": (
@@ -216,10 +293,38 @@ def _apply_position_effect(
             "entry_momo_score": signals.momentum.get(intent.to_symbol, 0.0),
             "notional_usd": intent.notional_usd,
             "opened_at": datetime.now(timezone.utc).isoformat(),
+            "high_price_usd": price,
+            "profit_taken": False,
         }
     elif intent.kind is IntentKind.EXIT:
         store.position = None
-    elif intent.kind is IntentKind.DELEVERAGE and store.position:
+    elif (
+        intent.kind in (IntentKind.DELEVERAGE, IntentKind.TAKE_PROFIT)
+        and store.position
+    ):
         store.position["notional_usd"] = max(
             0.0, store.position["notional_usd"] - intent.notional_usd
         )
+        if intent.kind is IntentKind.TAKE_PROFIT:
+            store.position["profit_taken"] = True
+
+
+def _sync_position_notional(
+    store: StateStore, holdings: dict[str, float], signals: MarketSignals
+) -> None:
+    """Mark the persisted sleeve size to the current wallet value."""
+    if not store.position:
+        return
+    symbol = store.position.get("symbol")
+    if not isinstance(symbol, str):
+        return
+    price = signals.prices.get(symbol)
+    units = holdings.get(symbol)
+    if price is None or units is None:
+        return
+    store.position["notional_usd"] = max(0.0, units * price)
+    store.position["high_price_usd"] = max(
+        float(store.position.get("high_price_usd") or 0.0),
+        float(store.position.get("entry_price_usd") or 0.0),
+        price,
+    )

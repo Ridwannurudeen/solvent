@@ -15,6 +15,12 @@ from solvent.kernel.rules import RiskConfig
 from solvent.kernel.state import MarketSignals, PortfolioState, SleevePosition
 
 CFG = RiskConfig()
+PROFIT_CFG = RiskConfig(
+    breakeven_activation_pct=0.04,
+    trailing_activation_pct=0.06,
+    take_profit_pct=0.10,
+    take_profit_fraction=0.35,
+)
 NOON = datetime(2026, 6, 24, 12, 0, tzinfo=timezone.utc)
 EVENING = datetime(2026, 6, 24, 21, 0, tzinfo=timezone.utc)
 
@@ -103,6 +109,12 @@ def test_no_entry_below_momentum_bar():
     assert decide(flat_state(), sig, CFG) == []
 
 
+def test_configurable_entry_bar():
+    cfg = RiskConfig(min_entry_momo=3.0)
+    sig = risk_on_signals(momentum={"CAKE": 2.9})
+    assert decide(flat_state(), sig, cfg) == []
+
+
 def test_no_entry_for_unpinned_address(monkeypatch):
     monkeypatch.setattr(allowlist, "ADDRESSES", {})  # nothing executable
     assert decide(flat_state(), risk_on_signals(), CFG) == []
@@ -151,6 +163,7 @@ def pos_state(**over) -> PortfolioState:
         entry_momo_score=2.0,
         notional_usd=66.0,
         opened_at=NOON,
+        high_price_usd=2.5,
     )
     return flat_state(position=pos, floor_usd=234.0, **over)
 
@@ -159,7 +172,51 @@ def test_stop_loss_exits():
     sig = risk_on_signals(prices={"CAKE": 2.5 * (1 - CFG.stop_pct - 0.01)})
     intents = decide(pos_state(), sig, CFG)
     assert [i.kind for i in intents] == [IntentKind.EXIT]
-    assert "STOP" in intents[0].reason
+    assert "PROTECTIVE STOP" in intents[0].reason
+
+
+def test_trailing_stop_exits_after_profit():
+    pos = SleevePosition(
+        symbol="CAKE",
+        entry_price_usd=2.5,
+        entry_momo_score=2.0,
+        notional_usd=66.0,
+        opened_at=NOON,
+        high_price_usd=3.0,
+    )
+    st = flat_state(position=pos, floor_usd=234.0)
+    sig = risk_on_signals(prices={"CAKE": 2.84})
+    intents = decide(st, sig, PROFIT_CFG)
+    assert [i.kind for i in intents] == [IntentKind.EXIT]
+    assert "PROTECTIVE STOP" in intents[0].reason
+
+
+def test_take_profit_deleverages_once():
+    sig = risk_on_signals(
+        prices={"CAKE": 2.5 * (1 + PROFIT_CFG.take_profit_pct + 0.01)}
+    )
+    intents = decide(pos_state(), sig, PROFIT_CFG)
+    assert [i.kind for i in intents] == [IntentKind.TAKE_PROFIT]
+    assert intents[0].notional_usd == pytest.approx(
+        66.0 * PROFIT_CFG.take_profit_fraction
+    )
+
+
+def test_take_profit_does_not_repeat():
+    pos = SleevePosition(
+        symbol="CAKE",
+        entry_price_usd=2.5,
+        entry_momo_score=2.0,
+        notional_usd=66.0,
+        opened_at=NOON,
+        high_price_usd=2.9,
+        profit_taken=True,
+    )
+    st = flat_state(position=pos, floor_usd=234.0)
+    sig = risk_on_signals(
+        prices={"CAKE": 2.5 * (1 + PROFIT_CFG.take_profit_pct + 0.01)}
+    )
+    assert decide(st, sig, PROFIT_CFG) == []
 
 
 def test_momentum_decay_exits():
@@ -167,6 +224,12 @@ def test_momentum_decay_exits():
     intents = decide(pos_state(), sig, CFG)
     assert [i.kind for i in intents] == [IntentKind.EXIT]
     assert "DECAY" in intents[0].reason
+
+
+def test_min_hold_hours_suppresses_momentum_decay():
+    cfg = RiskConfig(min_hold_hours=4.0)
+    sig = risk_on_signals(momentum={"CAKE": 0.9})
+    assert decide(pos_state(), sig, cfg) == []
 
 
 def test_degraded_data_never_decay_exits():

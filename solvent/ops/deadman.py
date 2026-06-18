@@ -22,9 +22,16 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..exec.executor import Journal, PaperExecutor, TwakExecutor
+from ..exec.executor import (
+    Journal,
+    PaperExecutor,
+    TwakExecutor,
+    intent_key,
+    intent_payload,
+)
 from ..kernel.allocator import IntentKind, TradeIntent
 from ..kernel.rules import RiskConfig
+from ..receipts.chain import ReceiptChain
 from .alerts import alert
 
 logger = logging.getLogger(__name__)
@@ -35,6 +42,7 @@ def run_deadman(
     executor,
     journal: Journal,
     cfg: RiskConfig,
+    receipts: ReceiptChain | None = None,
     now: datetime | None = None,
 ) -> dict:
     """Fire the fallback qualification trade if the day is unqualified.
@@ -61,7 +69,42 @@ def run_deadman(
         notional_usd=cfg.qual_trade_usd,
         reason="DEADMAN: independent fallback qualification trade",
     )
-    result = executor.execute(intent, now.strftime("deadman-%Y%m%d"))
+    cycle_id = now.strftime("deadman-%Y%m%d")
+    key = intent_key(intent, cycle_id)
+    payload = intent_payload(intent, cycle_id)
+    pre_trade = None
+    if receipts is not None:
+        pre_trade = receipts.append(
+            ts=now.isoformat(),
+            phase="pre_trade_commit",
+            cycle_id=cycle_id,
+            intent_key=key,
+            signals={"source": "deadman"},
+            regime="qualification",
+            thesis=intent.reason,
+            intents=[payload],
+            executions=[],
+        )
+    result = executor.execute(intent, cycle_id)
+    if receipts is not None:
+        receipts.append(
+            ts=now.isoformat(),
+            phase="execution_seal",
+            cycle_id=cycle_id,
+            intent_key=key,
+            pre_trade_hash=pre_trade.hash if pre_trade is not None else None,
+            regime="qualification",
+            thesis=result.detail[:200],
+            intents=[payload],
+            executions=[
+                {"key": result.intent_key, "ok": result.ok, "tx_hash": result.tx_hash}
+            ],
+            execution_seal={
+                "ok": result.ok,
+                "tx_hash": result.tx_hash,
+                "detail": result.detail[:500],
+            },
+        )
     return {
         "action": "qualify",
         "ok": result.ok,
@@ -96,7 +139,10 @@ def main() -> int:
     cfg = RiskConfig()
     journal = Journal(args.data_dir / "journal.jsonl")
     summary = run_deadman(
-        executor=make_executor(args.mode, journal, cfg), journal=journal, cfg=cfg
+        executor=make_executor(args.mode, journal, cfg),
+        journal=journal,
+        cfg=cfg,
+        receipts=ReceiptChain(args.data_dir / "receipts.jsonl"),
     )
     logger.info("deadman: %s", summary)
     if summary["action"] == "qualify":

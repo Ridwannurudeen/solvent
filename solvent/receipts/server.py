@@ -90,7 +90,12 @@ def verify(path: Path) -> dict:
 def summary(path: Path) -> dict:
     entries = load_entries(path)
     v = verify(path)
-    latest = entries[-1]["receipt"] if entries else None
+    latest = None
+    for entry in reversed(entries):
+        receipt = entry["receipt"]
+        if receipt.get("phase", "cycle_summary") == "cycle_summary":
+            latest = receipt
+            break
     return {
         "agent": "SOLVENT",
         "receipts": v["count"],

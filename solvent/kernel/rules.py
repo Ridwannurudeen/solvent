@@ -5,7 +5,7 @@ strategy freeze, and is enforced by pure functions in allocator.py.
 Nothing downstream (LLM, signals, executor) can override these values.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,20 @@ class RiskConfig:
     # ── Per-position protection ──────────────────────────────────────
     # Hard stop: exit sleeve position at this loss from entry.
     stop_pct: float = 0.12
+    # Move the protective stop to breakeven once a position has this profit.
+    breakeven_activation_pct: float = 999.0
+    # Trail from the observed high once a position has this profit.
+    trailing_activation_pct: float = 999.0
+    # Trailing stop distance from the observed high.
+    trailing_stop_pct: float = 0.05
+    # Take partial profits once per position after this profit threshold.
+    take_profit_pct: float = 999.0
+    # Fraction of the current sleeve value sold by the take-profit rule.
+    take_profit_fraction: float = 0.35
+    # Entry bar for confirmed 24h+7d momentum.
+    min_entry_momo: float = 1.0
+    # Ignore momentum-decay exits until a position has had time to work.
+    min_hold_hours: float = 0.0
     # Take-profit decay exit: exit when momentum score drops below this
     # fraction of its entry value.
     momo_decay_exit: float = 0.5
@@ -87,3 +101,56 @@ class RiskConfig:
             if banked_gain_pct >= tier.gain_pct:
                 cap = min(cap, tier.sleeve_cap)
         return cap
+
+
+RISK_PROFILE_NAMES = ("safety", "tournament_50", "conviction_50", "tournament_60")
+
+
+def risk_config_for_profile(profile: str) -> RiskConfig:
+    """Named risk profiles; `safety` is the unchanged default."""
+    name = profile.strip().lower()
+    base = RiskConfig()
+    if name == "safety":
+        return base
+    if name == "tournament_50":
+        return replace(
+            base,
+            floor_frac_min=0.50,
+            sleeve_frac_target=0.48,
+            max_trade_frac=0.50,
+            stop_pct=0.08,
+            ratchet=(
+                RatchetTier(gain_pct=0.10, sleeve_cap=0.35),
+                RatchetTier(gain_pct=0.20, sleeve_cap=0.25),
+                RatchetTier(gain_pct=0.35, sleeve_cap=0.15),
+            ),
+        )
+    if name == "conviction_50":
+        return replace(
+            base,
+            floor_frac_min=0.50,
+            sleeve_frac_target=0.48,
+            max_trade_frac=0.50,
+            stop_pct=0.08,
+            min_entry_momo=10.0,
+            min_hold_hours=48.0,
+            ratchet=(
+                RatchetTier(gain_pct=0.10, sleeve_cap=0.35),
+                RatchetTier(gain_pct=0.20, sleeve_cap=0.25),
+                RatchetTier(gain_pct=0.35, sleeve_cap=0.15),
+            ),
+        )
+    if name == "tournament_60":
+        return replace(
+            base,
+            floor_frac_min=0.40,
+            sleeve_frac_target=0.58,
+            max_trade_frac=0.60,
+            stop_pct=0.07,
+            ratchet=(
+                RatchetTier(gain_pct=0.10, sleeve_cap=0.40),
+                RatchetTier(gain_pct=0.20, sleeve_cap=0.25),
+                RatchetTier(gain_pct=0.35, sleeve_cap=0.15),
+            ),
+        )
+    raise ValueError(f"unknown risk profile: {profile}")

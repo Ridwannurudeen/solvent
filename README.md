@@ -18,7 +18,7 @@ Submission packet: [`SUBMISSION_PACKET.md`](SUBMISSION_PACKET.md)
 
 A self-custody user can't audit a black-box trader — they just have to trust it. SOLVENT inverts that: the agent emits a receipt every cycle and anchors the log on-chain, so anyone can pull the public log, recompute the hash chain, and check the head against the on-chain anchor. Nobody else in the field is doing decision receipts + an ERC-8004 trading identity; that's the originality lead.
 
-The trading strategy is deliberately **not** pitched as alpha. It is a disciplined **barbell** built to stay alive through a drawdown-DQ tournament (≥1 trade/day, 30% trailing-drawdown disqualification) while keeping convex upside if the momentum sleeve catches a move.
+The default trading strategy is a disciplined **barbell** built to stay alive through a drawdown-DQ tournament (≥1 trade/day, 30% trailing-drawdown disqualification) while keeping convex upside if the momentum sleeve catches a move. The repo also includes a research-tested `conviction_50` profile for the scored window; it is not activated unless `SOLVENT_RISK_PROFILE=conviction_50` is explicitly set.
 
 ## Architecture
 
@@ -37,9 +37,11 @@ solvent/
     livebook.py    live on-chain holdings reader (floor stables + open sleeve)
   receipts/
     chain.py       hash-chained receipt log + verify_chain()
+    pretrade.py    optional ERC-8004 pre-trade commit publisher (off by default)
     server.py      read-only HTTP API (/, /receipts, /verify, /state, /summary)
     anchor.py      daily ERC-8004 on-chain anchor of the chain head
   ops/           deadman, watchdog, alerts, preflight, readiness, execution recovery
+  research/      historical/stress backtests for comparing risk profiles
   engine.py      run_cycle(): one decision heartbeat
   run.py         runner — assembles paper/live mode and fires cycles
 ```
@@ -55,14 +57,17 @@ The cardinal rule: **the kernel is pure and deterministic.** The LLM advisor can
 - **Lock-in ratchet** (anti peak-drawdown DQ): after banked gains the sleeve cap tightens — **≥10% → 15%**, **≥20% → 10%**, **≥35% → 5%** — so winnings are de-risked into the floor rather than ridden back down.
 - **Kill switch:** if trailing drawdown from peak hits **22%** (`kill_switch_drawdown_pct`, a buffer below the 30% DQ line), liquidate the sleeve and freeze.
 - **Daily qualification:** a deadman path fires a $2 stable→stable micro-rotation after 20:00 UTC if no qualifying trade happened, satisfying the ≥1-trade/day rule even with every data feed down.
+- **Profit protection:** after gains, the sleeve has breakeven protection, a trailing stop, and one partial take-profit before the ratchet/kill-switch layers.
+- **Competitive profile:** `conviction_50` keeps a 50% stable floor, can deploy a 48% sleeve, tightens the stop to 8%, requires a 10.0 momentum score, and suppresses momentum-decay exits for 48h. It is designed to reduce fee churn while keeping more upside than the default safety profile.
 
 ## Decision receipts — and how to verify them
 
-Each cycle appends one receipt to `data/receipts.jsonl`. Line *N* commits to line *N−1*'s hash (`prev_hash`), so any mutation breaks every subsequent hash.
+Each receipt line in `data/receipts.jsonl` commits to line *N-1*'s hash (`prev_hash`), so any mutation breaks every subsequent hash. A normal hold cycle appends a `cycle_summary`; a money-moving intent appends a local `pre_trade_commit` before execution, an `execution_seal` after the result, and then the `cycle_summary`.
 
 ```jsonc
 {"receipt": {
   "seq": 5, "prev_hash": "0x…", "ts": "2026-06-12T04:00:25+00:00",
+  "phase": "cycle_summary", "cycle_id": "20260612T04",
   "data_purchases": [{"tool": "binance:ticker24h+7d", "cost_usdc": 0.0, "ok": true}],
   "signals": {"fear_greed": 12, "regime_deterministic": "risk-off", "advisor": null, …},
   "regime": "risk-off", "thesis": "hold (risk-off)",
@@ -82,6 +87,8 @@ python verify_receipts.py                         # recompute the chain from the
 ```
 
 The standalone verifier recomputes every receipt hash from genesis and checks each `prev_hash` link; the head it prints must match `/verify` (which runs the same check server-side) and, once the ERC-8004 anchor is registered, the head posted on-chain daily — closing the loop from public log → independently recomputed chain → on-chain commitment.
+
+For the strongest anti-hindsight mode, `SOLVENT_PRETRADE_ANCHOR=1` publishes each pre-trade commit hash to ERC-8004 metadata before the TWAK swap. It is off by default because it adds an on-chain transaction before every trade.
 
 ## ERC-8004 on-chain anchoring
 
@@ -106,19 +113,22 @@ Requires Python ≥ 3.12.
 
 ```bash
 pip install -e .
-python -m pytest -q                                   # 132 tests
+python -m pytest -q                                   # 146 tests
 python -m solvent.run --mode paper --data-dir ./data --once     # one cycle
 python -m solvent.run --mode paper --data-dir ./data --loop 3600  # hourly
 python -m solvent.receipts.server --data-dir ./data --port 3078   # serve the glass box
 python -m solvent.ops.readiness --data-dir ./data --profile submission
+python -m solvent.research.backtest --days 30 --interval 1h       # compare risk profiles
+python -m solvent.research.scan_universe --json                   # review-only candidate scanner
 ```
 
 Paper mode fills instantly at signal price with a 0.25% fee haircut, seeded with $300 USDT.
+`SOLVENT_RISK_PROFILE` selects a named profile (`safety` default, `tournament_50`, `conviction_50`, `tournament_60`) for paper or live runs.
 The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by default so no API credits are spent unless asked.
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units). **136 tests, ruff-clean.**
+- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units), and risk-profile backtests. **146 tests, ruff-clean.**
 - **Live now:** paper agent running hourly on a VPS with the dashboard public at solvent.gudman.xyz; receipts accumulating autonomously; ERC-8004 identity `136384` and daily anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
 - **Live mode wired (credential-gated):** `--mode live` assembles the real stack — CMC x402 paid signals (`CMCSource`), TWAK execution (`TwakExecutor`), and on-chain balance reads (`LiveBook`) — and fails fast without the x402 signer key plus TWAK wallet/keychain access. TWAK auth/wallet/keychain, quote-only swaps, ERC-8004 registration, Track 1 registration, the daily anchor timer, and an isolated $2 mainnet live rehearsal are verified on BSC mainnet. Remaining live-production gates: keep the x402 signer funded with BSC USD1, reset or isolate live accounting state, and explicitly flip `SOLVENT_MODE=live`.

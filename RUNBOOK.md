@@ -125,6 +125,8 @@ If the quote returns sensible token addresses/amounts, add the live block to
 ```
 SOLVENT_MODE=live
 SOLVENT_DATA_DIR=/opt/solvent/data-live
+SOLVENT_RISK_PROFILE=safety
+SOLVENT_PRETRADE_ANCHOR=0
 SOLVENT_PRIVATE_KEY=0x...
 SOLVENT_WALLET_PASSWORD=...
 SOLVENT_TRADE_NETWORK=bsc-mainnet
@@ -138,6 +140,15 @@ Live mode refuses to start against a data directory containing
 `paper-holdings.json`, unless `SOLVENT_ALLOW_LIVE_SHARED_DATA=1` is explicitly
 set. Do not set that override for the competition.
 
+`SOLVENT_RISK_PROFILE=safety` is the unchanged default. The researched
+competition profile is `conviction_50`, but switching to it changes real-money
+sizing and should be done only as an explicit cutover decision before the
+scored window.
+
+`SOLVENT_PRETRADE_ANCHOR=1` adds an ERC-8004 metadata tx before each TWAK swap.
+Leave it unset or `0` unless you deliberately choose the extra gas/latency for
+anti-hindsight proof.
+
 Fire one live cycle immediately instead of waiting for the hourly timer:
 
 ```bash
@@ -146,10 +157,22 @@ journalctl -u solvent.service -n 40 --no-pager
 curl -s https://solvent.gudman.xyz/state    # holdings now read from chain
 ```
 
-> Rehearsal safeguard (optional): the barbell sleeve target is 22%
-> (`RiskConfig.sleeve_frac_target`). The plan's rehearsal calls for a 10% cap;
-> lowering it is a code/config change and must happen **before** the Jun-20
-> strategy freeze, not during the scored week.
+> Rehearsal safeguard (optional): the default `safety` profile sleeve target is
+> 22% (`RiskConfig.sleeve_frac_target`). More aggressive profiles are available
+> through `SOLVENT_RISK_PROFILE`, but the selected profile should be frozen
+> before the scored week, not changed mid-run.
+
+## Optional five-minute scanner cadence
+
+`ops/solvent-scan.timer` fires the existing `solvent.service` every five
+minutes. It is installed but not enabled by `ops/install.sh`. If using it for
+the scored week, disable the hourly timer first:
+
+```bash
+sudo systemctl disable --now solvent.timer
+sudo systemctl enable --now solvent-scan.timer
+sudo systemctl list-timers 'solvent*' --no-pager
+```
 
 ## Verify go-live succeeded
 

@@ -166,6 +166,7 @@ RAW_BRIEF_SYMBOLS = [
 ]
 
 ALLOWED_SYMBOLS = frozenset(RAW_BRIEF_SYMBOLS)
+DISCOVERY_SYMBOLS = tuple(dict.fromkeys(RAW_BRIEF_SYMBOLS))
 
 # Floor assets: deep-liquidity stables used for the barbell floor and the
 # daily qualification trade. All must be in ALLOWED_SYMBOLS.
@@ -257,3 +258,8 @@ def is_allowed(symbol: str) -> bool:
 def is_executable(symbol: str) -> bool:
     """Allowed AND has a pinned contract address."""
     return symbol in ALLOWED_SYMBOLS and bool(ADDRESSES.get(symbol))
+
+
+def needs_manual_pin(symbol: str) -> bool:
+    """Allowlist-visible, but not executable until a BSC address is pinned."""
+    return is_allowed(symbol) and not is_executable(symbol)

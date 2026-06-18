@@ -20,9 +20,10 @@ from pathlib import Path
 from .brain.advisor import make_advisor
 from .engine import StateStore, run_cycle
 from .exec.executor import Journal, PaperExecutor
-from .kernel.rules import RiskConfig
+from .kernel.rules import RiskConfig, risk_config_for_profile
 from .ops.alerts import alert
 from .receipts.chain import ReceiptChain
+from .receipts.pretrade import build_pretrade_publisher
 from .signals.sources import BinanceSource
 
 logger = logging.getLogger(__name__)
@@ -201,9 +202,13 @@ def main() -> int:
     data_dir = args.data_dir
     receipts = ReceiptChain(data_dir / "receipts.jsonl")
     store = StateStore.load(data_dir / "state.json")
-    cfg = RiskConfig()
+    try:
+        cfg = risk_config_for_profile(os.environ.get("SOLVENT_RISK_PROFILE", "safety"))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     # Opt-in: the regime brain costs API credits, so it's off unless asked.
     advisor = make_advisor() if os.environ.get("SOLVENT_USE_ADVISOR") == "1" else None
+    pretrade_publisher = build_pretrade_publisher()
 
     if args.mode == "live":
         if (data_dir / "paper-holdings.json").exists() and os.environ.get(
@@ -236,6 +241,7 @@ def main() -> int:
                 holdings=holdings_now(),
                 cfg=cfg,
                 advisor=advisor,
+                pretrade_publisher=pretrade_publisher,
             )
             if summary["intents"] > 0 or summary["degraded"]:
                 alert(f"SOLVENT [{args.mode}] {json.dumps(summary)}")

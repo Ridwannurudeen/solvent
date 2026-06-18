@@ -23,6 +23,7 @@ class Regime(Enum):
 class IntentKind(Enum):
     ENTER = "enter"  # floor stable -> sleeve token
     EXIT = "exit"  # sleeve token -> floor stable
+    TAKE_PROFIT = "take_profit"  # partial sleeve -> floor after a gain
     DELEVERAGE = "deleverage"  # partial sleeve -> floor (ratchet/kill)
     QUALIFY = "qualify"  # micro stable<->stable qualification trade
 
@@ -69,7 +70,9 @@ def classify_regime(signals: MarketSignals) -> Regime:
     return Regime.NEUTRAL
 
 
-def best_candidate(signals: MarketSignals) -> tuple[str, float] | None:
+def best_candidate(
+    signals: MarketSignals, min_entry_momo: float = MIN_ENTRY_MOMO
+) -> tuple[str, float] | None:
     """Highest-momentum executable sleeve symbol above the entry bar."""
     ranked = sorted(
         (
@@ -80,7 +83,7 @@ def best_candidate(signals: MarketSignals) -> tuple[str, float] | None:
         key=lambda kv: kv[1],
         reverse=True,
     )
-    if ranked and ranked[0][1] >= MIN_ENTRY_MOMO:
+    if ranked and ranked[0][1] >= min_entry_momo:
         return ranked[0]
     return None
 
@@ -123,20 +126,51 @@ def decide(
         price = signals.prices.get(pos.symbol)
         if price is not None and pos.entry_price_usd > 0:
             pnl_pct = price / pos.entry_price_usd - 1.0
-            if pnl_pct <= -cfg.stop_pct:
+            high_price = max(pos.high_price_usd, pos.entry_price_usd, price)
+            stop_price = pos.entry_price_usd * (1.0 - cfg.stop_pct)
+            high_pnl = high_price / pos.entry_price_usd - 1.0
+            if high_pnl >= cfg.breakeven_activation_pct:
+                stop_price = max(stop_price, pos.entry_price_usd)
+            if high_pnl >= cfg.trailing_activation_pct:
+                stop_price = max(stop_price, high_price * (1.0 - cfg.trailing_stop_pct))
+            if price <= stop_price:
                 intents.append(
                     TradeIntent(
                         kind=IntentKind.EXIT,
                         from_symbol=pos.symbol,
                         to_symbol=cfg.floor_symbols[0],
                         notional_usd=pos.notional_usd,
-                        reason=f"STOP: {pos.symbol} {pnl_pct:.1%} <= -{cfg.stop_pct:.0%}",
+                        reason=(
+                            f"PROTECTIVE STOP: {pos.symbol} price ${price:.4f} <= "
+                            f"${stop_price:.4f} ({pnl_pct:.1%} from entry)"
+                        ),
+                    )
+                )
+                return intents
+            if (
+                not pos.profit_taken
+                and pnl_pct >= cfg.take_profit_pct
+                and pos.notional_usd * cfg.take_profit_fraction > cfg.qual_trade_usd
+            ):
+                intents.append(
+                    TradeIntent(
+                        kind=IntentKind.TAKE_PROFIT,
+                        from_symbol=pos.symbol,
+                        to_symbol=cfg.floor_symbols[0],
+                        notional_usd=pos.notional_usd * cfg.take_profit_fraction,
+                        reason=(
+                            f"TAKE PROFIT: {pos.symbol} {pnl_pct:.1%} >= "
+                            f"{cfg.take_profit_pct:.0%}; sell "
+                            f"{cfg.take_profit_fraction:.0%} of sleeve"
+                        ),
                     )
                 )
                 return intents
         momo_now = signals.momentum.get(pos.symbol)
+        age_hours = (state.now - pos.opened_at).total_seconds() / 3600
         if (
-            not signals.degraded
+            age_hours >= cfg.min_hold_hours
+            and not signals.degraded
             and momo_now is not None
             and pos.entry_momo_score > 0
             and momo_now < cfg.momo_decay_exit * pos.entry_momo_score
@@ -184,7 +218,7 @@ def decide(
         and state.equity_usd >= cfg.min_portfolio_usd
         and effective_regime is Regime.RISK_ON
     ):
-        cand = best_candidate(signals)
+        cand = best_candidate(signals, cfg.min_entry_momo)
         if cand is not None:
             symbol, score = cand
             cap_frac = min(

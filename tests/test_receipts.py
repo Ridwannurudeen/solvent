@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 from solvent.receipts.chain import (
@@ -44,6 +45,58 @@ def test_chain_survives_reload(tmp_path):
     reloaded.append(ts="2026-06-24T13:00:00Z", thesis="after reload")
     ok, count, _ = verify_chain(chain.path)
     assert ok and count == 4
+
+
+def test_verifier_accepts_legacy_receipt_without_phase_fields(tmp_path):
+    chain = make_chain(tmp_path, n=1)
+    entry = json.loads(chain.path.read_text().splitlines()[0])
+    receipt = entry["receipt"]
+    for field in (
+        "phase",
+        "cycle_id",
+        "intent_key",
+        "pre_trade_hash",
+        "execution_seal",
+    ):
+        receipt.pop(field, None)
+    entry["hash"] = (
+        "0x"
+        + hashlib.sha256(
+            json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+    )
+    chain.path.write_text(json.dumps(entry, separators=(",", ":")) + "\n")
+
+    ok, count, head = verify_chain(chain.path)
+
+    assert ok is True
+    assert count == 1
+    assert head == entry["hash"]
+
+
+def test_mixed_receipt_phases_verify(tmp_path):
+    chain = ReceiptChain(tmp_path / "receipts.jsonl")
+    pre = chain.append(
+        ts="2026-06-24T12:00:00Z",
+        phase="pre_trade_commit",
+        cycle_id="c1",
+        intent_key="intent-1",
+        thesis="commit before send",
+    )
+    chain.append(
+        ts="2026-06-24T12:00:01Z",
+        phase="execution_seal",
+        cycle_id="c1",
+        intent_key="intent-1",
+        pre_trade_hash=pre.hash,
+        execution_seal={"ok": True, "tx_hash": "0xabc"},
+    )
+
+    ok, count, head = verify_chain(chain.path)
+
+    assert ok is True
+    assert count == 2
+    assert head == chain.head_hash
 
 
 def test_tamper_detected(tmp_path):

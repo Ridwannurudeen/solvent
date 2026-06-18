@@ -53,6 +53,29 @@ def test_summary_reports_latest(tmp_path):
     assert s["latest_regime"] == "risk-on"
 
 
+def test_summary_ignores_latest_execution_seal(tmp_path):
+    p = tmp_path / "receipts.jsonl"
+    chain = ReceiptChain(p)
+    chain.append(
+        ts="2026-06-24T13:00:00+00:00",
+        phase="cycle_summary",
+        regime="risk-on",
+        thesis="enter CAKE",
+        equity_usd=305.0,
+        dq_headroom_pct=0.28,
+    )
+    chain.append(
+        ts="2026-06-24T13:00:01+00:00",
+        phase="execution_seal",
+        cycle_id="20260624T13",
+        intent_key="k",
+        execution_seal={"ok": True},
+    )
+    s = summary(p)
+    assert s["latest_equity_usd"] == 305.0
+    assert s["latest_regime"] == "risk-on"
+
+
 def test_verify_detects_tamper(tmp_path):
     p = tmp_path / "receipts.jsonl"
     _seed(p)

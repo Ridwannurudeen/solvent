@@ -80,6 +80,13 @@ drawdown gate:
 - A kill switch liquidates the sleeve before the competition drawdown line.
 - A deadman path can fire a small stable-to-stable rotation to satisfy the daily
   trade requirement.
+- A researched `conviction_50` profile is available for the live competition:
+  50% stable floor, 48% maximum sleeve, 8% hard stop, 10.0 momentum entry bar,
+  and 48h minimum hold before momentum-decay exits. It is activated only by
+  explicit runtime profile selection.
+- Money-moving intents produce a pre-trade commit receipt before execution and
+  an execution seal after the result. Optional ERC-8004 pre-trade anchoring is
+  available but remains explicit because it adds a tx before every swap.
 
 The optional advisor can only de-risk. It cannot force a larger trade or bypass
 the deterministic kernel.
@@ -99,11 +106,12 @@ the deterministic kernel.
 
 1. Dashboard with chain-verified status.
 2. `/receipts` showing data purchases and receipt hashes.
-3. CMC x402 receipt or live proof showing non-zero data cost.
-4. TWAK live rehearsal tx on BscScan.
-5. `python verify_receipts.py` matching `/verify`.
-6. ERC-8004 anchor in `/state` and BscScan.
-7. Strategy/risk constitution in `kernel/rules.py`.
+3. A `pre_trade_commit` followed by an `execution_seal`.
+4. CMC x402 receipt or live proof showing non-zero data cost.
+5. TWAK live rehearsal tx on BscScan.
+6. `python verify_receipts.py` matching `/verify`.
+7. ERC-8004 anchor in `/state` and BscScan.
+8. Strategy/risk constitution in `kernel/rules.py`.
 
 ## Do Not Claim
 

@@ -10,6 +10,7 @@ log is tamper-evident and publicly verifiable after the fact.
 
 import hashlib
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -28,6 +29,11 @@ class Receipt:
     seq: int
     prev_hash: str
     ts: str  # ISO-8601 UTC
+    phase: str = "cycle_summary"
+    cycle_id: str = ""
+    intent_key: str | None = None
+    pre_trade_hash: str | None = None
+    execution_seal: dict = field(default_factory=dict)
     data_purchases: list[DataPurchase] = field(default_factory=list)
     signals: dict = field(default_factory=dict)
     regime: str = ""
@@ -76,6 +82,8 @@ class ReceiptChain:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
         self._head_hash = receipt.hash
         self._next_seq += 1
         return receipt
@@ -96,9 +104,8 @@ def verify_chain(path: Path) -> tuple[bool, int, str]:
         rec = entry["receipt"]
         if rec["prev_hash"] != prev:
             return False, count, prev
-        purchases = [DataPurchase(**p) for p in rec.pop("data_purchases")]
-        receipt = Receipt(data_purchases=purchases, **rec)
-        if receipt.hash != entry["hash"]:
+        canonical = json.dumps(rec, sort_keys=True, separators=(",", ":"))
+        if "0x" + hashlib.sha256(canonical.encode()).hexdigest() != entry["hash"]:
             return False, count, prev
         prev = entry["hash"]
         count += 1

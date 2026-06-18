@@ -10,7 +10,13 @@ from types import SimpleNamespace
 
 
 from solvent.exec import executor as exec_mod
-from solvent.exec.executor import Journal, PaperExecutor, TwakExecutor, intent_key
+from solvent.exec.executor import (
+    Journal,
+    PaperExecutor,
+    TwakExecutor,
+    intent_key,
+    intent_payload,
+)
 from solvent.kernel.allocator import IntentKind, TradeIntent
 
 CYCLE = "20260624T12"
@@ -45,6 +51,14 @@ def test_intent_key_is_stable_and_specific():
     assert a != intent_key(_intent(3.0), CYCLE)  # notional matters
     assert a != intent_key(_intent(2.0, to="DAI"), CYCLE)  # destination matters
     assert "USDT->USDC" in a and "2.00" in a
+
+
+def test_intent_payload_uses_intent_key():
+    payload = intent_payload(_intent(), CYCLE)
+
+    assert payload["key"] == intent_key(_intent(), CYCLE)
+    assert payload["kind"] == "qualify"
+    assert payload["notional_usd"] == 2.0
 
 
 def test_journal_persists_and_counts(tmp_path):

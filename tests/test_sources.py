@@ -13,8 +13,10 @@ from solvent.signals.sources import (
     CMC_QUOTE_IDS,
     CMCSource,
     _extract_fear_greed,
+    _extract_quote_metrics,
     _extract_quote_fields,
     _iter_quotes,
+    quote_ids_for,
     momentum_score,
 )
 
@@ -62,6 +64,32 @@ def test_extract_quote_fields_nested_and_flat():
     assert _extract_quote_fields({}) == (None, None, None)
 
 
+def test_extract_quote_metrics_includes_liquidity_context():
+    entry = {
+        "symbol": "CAKE",
+        "quote": {
+            "USD": {
+                "price": 2.5,
+                "percent_change_1h": 1.0,
+                "percent_change_24h": 3.0,
+                "percent_change_7d": 5.0,
+                "volume_change_24h": 12.0,
+                "volume_24h": 10_000_000,
+                "market_cap": 700_000_000,
+            }
+        },
+    }
+    metrics = _extract_quote_metrics(entry)
+    assert metrics.percent_change_1h == 1.0
+    assert metrics.volume_change_24h == 12.0
+    assert metrics.volume_24h == 10_000_000
+    assert metrics.market_cap == 700_000_000
+
+
+def test_quote_ids_for_ignores_unknown_symbols():
+    assert quote_ids_for(["CAKE", "UNKNOWN"], {"CAKE": 7186}) == "7186"
+
+
 # ── CMCSource.fetch with a fake paying client ─────────────────────────
 
 
@@ -107,6 +135,7 @@ def test_fetch_happy_path_parses_signals_and_meters_cost():
     assert signals.fear_greed == 60
     assert signals.prices["CAKE"] == 2.5
     assert signals.momentum["CAKE"] == momentum_score(3.0, 5.0)
+    assert signals.volume_24h_usd == {}
     # fear_greed 60 >= 45 -> anomaly tier (derivatives) fetched.
     assert ("get_global_crypto_derivatives_metrics", {}) in client.calls
     assert ("get_crypto_quotes_latest", {"id": CMC_QUOTE_IDS}) in client.calls

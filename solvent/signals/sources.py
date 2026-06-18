@@ -17,6 +17,8 @@ positive ("momentum on confirmation").
 """
 
 import logging
+from collections.abc import Iterable
+from dataclasses import dataclass
 
 import httpx
 
@@ -58,7 +60,26 @@ CMC_IDS = {
     "FIL": 2280,
     "ATOM": 3794,
 }
-CMC_QUOTE_IDS = ",".join(str(CMC_IDS[s]) for s in SLEEVE_SYMBOLS if s in CMC_IDS)
+DISCOVERY_CMC_IDS = {**CMC_IDS}
+
+
+def quote_ids_for(symbols: Iterable[str], cmc_ids: dict[str, int] | None = None) -> str:
+    ids = cmc_ids or CMC_IDS
+    return ",".join(str(ids[s]) for s in symbols if s in ids)
+
+
+CMC_QUOTE_IDS = quote_ids_for(SLEEVE_SYMBOLS)
+
+
+@dataclass(frozen=True)
+class QuoteMetrics:
+    price: float | None = None
+    percent_change_1h: float | None = None
+    percent_change_24h: float | None = None
+    percent_change_7d: float | None = None
+    volume_change_24h: float | None = None
+    volume_24h: float | None = None
+    market_cap: float | None = None
 
 
 def _mcp_json(result: dict | None) -> dict | list | None:
@@ -143,15 +164,32 @@ class CMCSource:
         quotes = _mcp_json(q_raw)
         momentum: dict[str, float] = {}
         prices: dict[str, float] = {}
+        percent_change_1h: dict[str, float] = {}
+        volume_change_24h: dict[str, float] = {}
+        volume_24h_usd: dict[str, float] = {}
+        market_cap_usd: dict[str, float] = {}
         for entry in _iter_quotes(quotes):
             sym = entry.get("symbol")
             if sym not in SLEEVE_SYMBOLS:
                 continue
-            price, pc24, pc7d = _extract_quote_fields(entry)
-            if price is not None:
-                prices[sym] = price
-            if pc24 is not None and pc7d is not None:
-                momentum[sym] = momentum_score(pc24, pc7d)
+            metrics = _extract_quote_metrics(entry)
+            if metrics.price is not None:
+                prices[sym] = metrics.price
+            if metrics.percent_change_1h is not None:
+                percent_change_1h[sym] = metrics.percent_change_1h
+            if metrics.volume_change_24h is not None:
+                volume_change_24h[sym] = metrics.volume_change_24h
+            if metrics.volume_24h is not None:
+                volume_24h_usd[sym] = metrics.volume_24h
+            if metrics.market_cap is not None:
+                market_cap_usd[sym] = metrics.market_cap
+            if (
+                metrics.percent_change_24h is not None
+                and metrics.percent_change_7d is not None
+            ):
+                momentum[sym] = momentum_score(
+                    metrics.percent_change_24h, metrics.percent_change_7d
+                )
         if not prices:
             degraded = True
 
@@ -174,6 +212,10 @@ class CMCSource:
                 btc_funding_rate=btc_funding,
                 momentum=momentum,
                 prices=prices,
+                percent_change_1h=percent_change_1h,
+                volume_change_24h=volume_change_24h,
+                volume_24h_usd=volume_24h_usd,
+                market_cap_usd=market_cap_usd,
                 degraded=degraded,
             ),
             purchases,
@@ -209,18 +251,37 @@ def _iter_quotes(quotes) -> list[dict]:
 
 def _extract_quote_fields(entry: dict):
     """price, pct_change_24h, pct_change_7d from a CMC quote entry."""
+    metrics = _extract_quote_metrics(entry)
+    return metrics.price, metrics.percent_change_24h, metrics.percent_change_7d
+
+
+def _extract_quote_metrics(entry: dict) -> QuoteMetrics:
+    """Quote metrics from a CMC quote entry."""
     quote = entry.get("quote", {})
     usd = quote.get("USD", quote) if isinstance(quote, dict) else {}
     if not isinstance(usd, dict):
         usd = {}
-    price = usd.get("price", entry.get("price"))
-    pc24 = usd.get("percent_change_24h", entry.get("percent_change_24h"))
-    pc7d = usd.get("percent_change_7d", entry.get("percent_change_7d"))
 
     def to_f(v):
         return float(v) if isinstance(v, (int, float)) else None
 
-    return to_f(price), to_f(pc24), to_f(pc7d)
+    return QuoteMetrics(
+        price=to_f(usd.get("price", entry.get("price"))),
+        percent_change_1h=to_f(
+            usd.get("percent_change_1h", entry.get("percent_change_1h"))
+        ),
+        percent_change_24h=to_f(
+            usd.get("percent_change_24h", entry.get("percent_change_24h"))
+        ),
+        percent_change_7d=to_f(
+            usd.get("percent_change_7d", entry.get("percent_change_7d"))
+        ),
+        volume_change_24h=to_f(
+            usd.get("volume_change_24h", entry.get("volume_change_24h"))
+        ),
+        volume_24h=to_f(usd.get("volume_24h", entry.get("volume_24h"))),
+        market_cap=to_f(usd.get("market_cap", entry.get("market_cap"))),
+    )
 
 
 # ── Free source (paper mode / cross-check) ───────────────────────────
@@ -242,6 +303,7 @@ class BinanceSource:
         purchases = [DataPurchase(tool="binance:ticker24h+7d", cost_usdc=0.0, ok=True)]
         momentum: dict[str, float] = {}
         prices: dict[str, float] = {}
+        volume_24h_usd: dict[str, float] = {}
         degraded = False
         try:
             resp = self._http.get(f"{BINANCE_API}/ticker/24hr")
@@ -252,6 +314,7 @@ class BinanceSource:
                 if not t:
                     continue
                 prices[sym] = float(t["lastPrice"])
+                volume_24h_usd[sym] = float(t.get("quoteVolume", 0.0))
                 pc24 = float(t["priceChangePercent"])
                 pc7d = self._pct_change_7d(pair)
                 if pc7d is not None:
@@ -278,6 +341,7 @@ class BinanceSource:
                 btc_funding_rate=None,
                 momentum=momentum,
                 prices=prices,
+                volume_24h_usd=volume_24h_usd,
                 degraded=degraded,
             ),
             purchases,

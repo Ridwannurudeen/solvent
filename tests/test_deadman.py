@@ -1,8 +1,10 @@
+import json
 from datetime import datetime, timezone
 
 from solvent.exec.executor import Journal, PaperExecutor, TwakExecutor
 from solvent.kernel.rules import RiskConfig
 from solvent.ops.deadman import make_executor, run_deadman
+from solvent.receipts.chain import ReceiptChain
 
 CFG = RiskConfig()
 # A fixed UTC day; hour chosen relative to the qualification deadline.
@@ -28,6 +30,29 @@ def test_fires_when_unqualified_and_past_deadline(tmp_path):
     assert summary["action"] == "qualify"
     assert summary["ok"] is True
     assert journal.confirmed_trades_on(str(TODAY)) == 1
+
+
+def test_deadman_emits_pre_trade_and_seal_receipts(tmp_path):
+    journal = _journal(tmp_path)
+    receipts = ReceiptChain(tmp_path / "receipts.jsonl")
+    summary = run_deadman(
+        executor=PaperExecutor(journal),
+        journal=journal,
+        cfg=CFG,
+        receipts=receipts,
+        now=_at(CFG.qual_deadline_hour_utc + 1),
+    )
+    entries = [
+        json.loads(line)["receipt"]
+        for line in (tmp_path / "receipts.jsonl").read_text().splitlines()
+    ]
+
+    assert summary["action"] == "qualify"
+    assert [entry["phase"] for entry in entries] == [
+        "pre_trade_commit",
+        "execution_seal",
+    ]
+    assert entries[1]["pre_trade_hash"]
 
 
 def test_noop_before_deadline(tmp_path):
@@ -74,7 +99,7 @@ def test_independent_of_signals():
     import inspect
 
     params = set(inspect.signature(run_deadman).parameters)
-    assert params == {"executor", "journal", "cfg", "now"}
+    assert params == {"executor", "journal", "cfg", "receipts", "now"}
     assert "source" not in params and "signals" not in params
 
 

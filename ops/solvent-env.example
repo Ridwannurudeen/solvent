@@ -4,6 +4,8 @@
 # funded and the live credentials are present on the host.
 SOLVENT_MODE=paper
 SOLVENT_DATA_DIR=/opt/solvent/data
+# safety (default) | tournament_50 | conviction_50 | tournament_60
+SOLVENT_RISK_PROFILE=safety
 
 # Telegram alerts (BotFather token + chat id). Leave unset to disable.
 SOLVENT_TG_BOT_TOKEN=
@@ -36,3 +38,7 @@ SOLVENT_ANCHOR_BACKEND=twak
 SOLVENT_BSC_NETWORK=bsc-mainnet
 # SOLVENT_AGENT_ID=               # from `python -m solvent.receipts.anchor --register`
 # SOLVENT_RECEIPTS_URL=https://solvent.gudman.xyz
+
+# Optional: publish each pre-trade commit hash to ERC-8004 before a TWAK swap.
+# Adds one on-chain metadata tx before every trade; leave off unless explicitly chosen.
+# SOLVENT_PRETRADE_ANCHOR=0
