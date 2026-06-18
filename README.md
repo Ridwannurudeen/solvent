@@ -124,11 +124,15 @@ python -m solvent.research.scan_universe --json                   # review-only 
 
 Paper mode fills instantly at signal price with a 0.25% fee haircut, seeded with $300 USDT.
 `SOLVENT_RISK_PROFILE` selects a named profile (`safety` default, `tournament_50`, `conviction_50`, `tournament_60`) for paper or live runs.
+Set `SOLVENT_ADAPTIVE_PROFILE=1` to let SOLVENT auto-switch between
+`safety` / `conviction_50` / `tournament_60` per cycle based on live
+Fear & Greed, momentum strength, and drawdown headroom; this stays inside the
+existing kill-switch, 1-trade/day, and daily fallback constraints.
 The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by default so no API credits are spent unless asked.
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, ops armor (deadman + watchdog + systemd units), and risk-profile backtests. **146 tests, ruff-clean.**
+- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), and risk-profile backtests. **175 tests, ruff-clean.**
 - **Live now:** paper agent running hourly on a VPS with the dashboard public at solvent.gudman.xyz; receipts accumulating autonomously; ERC-8004 identity `136384` and daily anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
 - **Live mode wired (credential-gated):** `--mode live` assembles the real stack — CMC x402 paid signals (`CMCSource`), TWAK execution (`TwakExecutor`), and on-chain balance reads (`LiveBook`) — and fails fast without the x402 signer key plus TWAK wallet/keychain access. TWAK auth/wallet/keychain, quote-only swaps, ERC-8004 registration, Track 1 registration, the daily anchor timer, and an isolated $2 mainnet live rehearsal are verified on BSC mainnet. Remaining live-production gates: keep the x402 signer funded with BSC USD1, reset or isolate live accounting state, and explicitly flip `SOLVENT_MODE=live`.

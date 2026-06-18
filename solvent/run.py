@@ -13,6 +13,7 @@ import argparse
 import json
 import logging
 import os
+from collections.abc import Callable
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,7 @@ from .brain.advisor import make_advisor
 from .engine import StateStore, run_cycle
 from .exec.executor import Journal, PaperExecutor
 from .kernel.rules import RiskConfig, risk_config_for_profile
+from .kernel.state import MarketSignals, PortfolioState
 from .ops.alerts import alert
 from .receipts.chain import ReceiptChain
 from .receipts.pretrade import build_pretrade_publisher
@@ -30,6 +32,58 @@ logger = logging.getLogger(__name__)
 
 PAPER_SEED_USDT = 300.0
 PAPER_FEE = 0.0025  # one-side DEX fee haircut applied to every fill
+
+_PROFILE_ORDER = ("safety", "conviction_50", "tournament_50", "tournament_60")
+
+
+def _profile_rank(profile: str) -> int:
+    try:
+        return _PROFILE_ORDER.index(profile)
+    except ValueError as exc:
+        raise ValueError(f"unknown risk profile: {profile}") from exc
+
+
+def _clamp_profile(profile: str, max_profile: str) -> str:
+    base_rank = _profile_rank(max_profile)
+    return profile if _profile_rank(profile) <= base_rank else max_profile
+
+
+def _adaptive_profile_selector(
+    base_profile: str,
+) -> Callable[[RiskConfig, PortfolioState, MarketSignals], RiskConfig]:
+    if base_profile not in _PROFILE_ORDER:
+        raise ValueError(f"unknown risk profile: {base_profile}")
+
+    def _selector(
+        _cfg: RiskConfig, state: PortfolioState, signals: MarketSignals
+    ) -> RiskConfig:
+        if signals.degraded or signals.fear_greed is None:
+            return risk_config_for_profile("safety")
+        if (
+            signals.fear_greed < 35
+            or state.dq_headroom_pct < 0.08
+            or state.trailing_drawdown_pct > 0.14
+            or state.banked_gain_pct < -0.10
+        ):
+            return risk_config_for_profile("safety")
+
+        top_momentum = max(signals.momentum.values(), default=0.0)
+        funding = signals.btc_funding_rate or 0.0
+
+        if (
+            signals.fear_greed >= 68
+            and top_momentum >= 8.0
+            and funding < 0.001
+            and state.equity_usd > state.start_equity_usd * 0.98
+        ):
+            target = "tournament_60"
+        elif signals.fear_greed >= 50 and top_momentum >= 3.0:
+            target = "conviction_50"
+        else:
+            target = "safety"
+        return risk_config_for_profile(_clamp_profile(target, base_profile))
+
+    return _selector
 
 
 class PaperBook:
@@ -203,9 +257,15 @@ def main() -> int:
     receipts = ReceiptChain(data_dir / "receipts.jsonl")
     store = StateStore.load(data_dir / "state.json")
     try:
-        cfg = risk_config_for_profile(os.environ.get("SOLVENT_RISK_PROFILE", "safety"))
+        base_profile = os.environ.get("SOLVENT_RISK_PROFILE", "safety")
+        cfg = risk_config_for_profile(base_profile)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
+    adaptive_selector = (
+        _adaptive_profile_selector(base_profile)
+        if os.environ.get("SOLVENT_ADAPTIVE_PROFILE") == "1"
+        else None
+    )
     # Opt-in: the regime brain costs API credits, so it's off unless asked.
     advisor = make_advisor() if os.environ.get("SOLVENT_USE_ADVISOR") == "1" else None
     pretrade_publisher = build_pretrade_publisher()
@@ -240,6 +300,7 @@ def main() -> int:
                 store=store,
                 holdings=holdings_now(),
                 cfg=cfg,
+                cfg_selector=adaptive_selector,
                 advisor=advisor,
                 pretrade_publisher=pretrade_publisher,
             )

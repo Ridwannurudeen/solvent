@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import subprocess
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,12 +22,32 @@ from ..kernel.allocator import TradeIntent
 logger = logging.getLogger(__name__)
 
 
+_TX_HASH_RE = re.compile(r"0x[a-fA-F0-9]{64}")
+
+
 @dataclass(frozen=True)
 class ExecutionResult:
     intent_key: str
     ok: bool
     tx_hash: str | None
     detail: str
+
+
+def _extract_tx_hash(output: str) -> str | None:
+    try:
+        payload = json.loads(output)
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict):
+        tx_hash = (
+            payload.get("txHash")
+            or payload.get("transactionHash")
+            or payload.get("hash")
+        )
+        if isinstance(tx_hash, str):
+            return tx_hash
+    match = _TX_HASH_RE.search(output)
+    return match.group(0) if match else None
 
 
 def intent_key(intent: TradeIntent, cycle_id: str) -> str:
@@ -211,16 +232,7 @@ class TwakExecutor:
             return ExecutionResult(key, False, None, "timeout: outcome unknown")
 
         out = proc.stdout.strip() or proc.stderr.strip()
-        tx_hash = None
-        try:
-            payload = json.loads(out)
-            tx_hash = (
-                payload.get("txHash")
-                or payload.get("transactionHash")
-                or payload.get("hash")
-            )
-        except ValueError:
-            pass
+        tx_hash = _extract_tx_hash(out)
         ok = proc.returncode == 0 and tx_hash is not None
         if not ok:
             logger.error("twak attempt outcome UNKNOWN - halting further sends")

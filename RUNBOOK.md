@@ -126,6 +126,7 @@ If the quote returns sensible token addresses/amounts, add the live block to
 SOLVENT_MODE=live
 SOLVENT_DATA_DIR=/opt/solvent/data-live
 SOLVENT_RISK_PROFILE=safety
+SOLVENT_ADAPTIVE_PROFILE=1
 SOLVENT_PRETRADE_ANCHOR=0
 SOLVENT_PRIVATE_KEY=0x...
 SOLVENT_WALLET_PASSWORD=...
@@ -148,6 +149,11 @@ scored window.
 `SOLVENT_PRETRADE_ANCHOR=1` adds an ERC-8004 metadata tx before each TWAK swap.
 Leave it unset or `0` unless you deliberately choose the extra gas/latency for
 anti-hindsight proof.
+
+`SOLVENT_ADAPTIVE_PROFILE=1` keeps sleeve risk dynamic within the same max
+drawdown, kill-switch, and daily requirements. It selects conservative profile
+`safety` during degraded or weak signal regimes and moves toward `conviction_50` /
+`tournament_60` only when momentum and broad risk appetite improve.
 
 Fire one live cycle immediately instead of waiting for the hourly timer:
 

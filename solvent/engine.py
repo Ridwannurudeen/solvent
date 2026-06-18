@@ -10,6 +10,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from .exec.executor import ExecutionResult, Journal, intent_key, intent_payload
 from .kernel.allocator import (
@@ -20,11 +21,18 @@ from .kernel.allocator import (
     more_conservative,
     qualification_intent,
 )
-from .kernel.rules import RiskConfig
+from .kernel.rules import RiskConfig, RISK_PROFILE_NAMES, risk_config_for_profile
 from .kernel.state import MarketSignals, PortfolioState, SleevePosition
 from .receipts.chain import ReceiptChain
 
 logger = logging.getLogger(__name__)
+
+
+def _risk_profile_name(cfg: RiskConfig) -> str:
+    for name in RISK_PROFILE_NAMES:
+        if cfg == risk_config_for_profile(name):
+            return name
+    return "custom"
 
 
 @dataclass
@@ -99,6 +107,8 @@ def run_cycle(
     cfg: RiskConfig,
     advisor=None,
     pretrade_publisher=None,
+    cfg_selector: Callable[[RiskConfig, PortfolioState, MarketSignals], RiskConfig]
+    | None = None,
     now: datetime | None = None,
 ) -> dict:
     """One full decision cycle. Returns a summary dict (for logs/alerts)."""
@@ -126,6 +136,9 @@ def run_cycle(
         qualified_today=confirmed_today > 0,
         now=now,
     )
+
+    if cfg_selector is not None:
+        cfg = cfg_selector(cfg, state, signals)
 
     deterministic_regime = classify_regime(signals)
     advice = None
@@ -233,6 +246,7 @@ def run_cycle(
             "market_cap_usd": {
                 k: round(v, 2) for k, v in signals.market_cap_usd.items()
             },
+            "active_risk_profile": _risk_profile_name(cfg),
             "degraded": signals.degraded,
             "regime_deterministic": deterministic_regime.value,
             "advisor": (
@@ -269,6 +283,7 @@ def run_cycle(
     summary = {
         "cycle": cycle_id,
         "regime": regime,
+        "active_risk_profile": _risk_profile_name(cfg),
         "equity_usd": round(equity, 2),
         "intents": len(intents),
         "executed_ok": sum(1 for e in executions if e.ok),
