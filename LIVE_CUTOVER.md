@@ -13,7 +13,7 @@ Run these from the VPS as the `solvent` user:
 ```bash
 cd /opt/solvent
 sudo -u solvent -H .venv/bin/python -m solvent.ops.preflight --env-file /opt/solvent/solvent.env
-sudo -u solvent -H .venv/bin/python -m solvent.ops.readiness --env-file /opt/solvent/solvent.env --profile live
+sudo -u solvent -H .venv/bin/python -m solvent.ops.readiness --env-file /opt/solvent/solvent.env --data-dir /opt/solvent/data-live --profile live
 sudo -u solvent -H .venv/bin/python -m solvent.ops.exec_recovery --data-dir /opt/solvent/data-live list-unresolved
 sudo -u solvent -H twak compete status
 sudo -u solvent -H twak wallet balance --chain bsc --json
