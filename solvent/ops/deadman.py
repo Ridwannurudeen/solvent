@@ -32,6 +32,7 @@ from ..exec.executor import (
 from ..kernel.allocator import IntentKind, TradeIntent
 from ..kernel.rules import RiskConfig
 from ..receipts.chain import ReceiptChain
+from ..receipts.pretrade import build_pretrade_publisher
 from .alerts import alert
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ def run_deadman(
     journal: Journal,
     cfg: RiskConfig,
     receipts: ReceiptChain | None = None,
+    pretrade_publisher=None,
     now: datetime | None = None,
 ) -> dict:
     """Fire the fallback qualification trade if the day is unqualified.
@@ -85,6 +87,11 @@ def run_deadman(
             intents=[payload],
             executions=[],
         )
+    pre_trade_anchor_tx_hash = None
+    if pretrade_publisher is not None and pre_trade is not None:
+        pre_trade_anchor_tx_hash = pretrade_publisher.publish(
+            cycle_id=cycle_id, intent_key=key, commit_hash=pre_trade.hash
+        )
     result = executor.execute(intent, cycle_id)
     if receipts is not None:
         receipts.append(
@@ -102,6 +109,7 @@ def run_deadman(
             execution_seal={
                 "ok": result.ok,
                 "tx_hash": result.tx_hash,
+                "pre_trade_anchor_tx_hash": pre_trade_anchor_tx_hash,
                 "detail": result.detail[:500],
             },
         )
@@ -143,6 +151,7 @@ def main() -> int:
         journal=journal,
         cfg=cfg,
         receipts=ReceiptChain(args.data_dir / "receipts.jsonl"),
+        pretrade_publisher=build_pretrade_publisher(),
     )
     logger.info("deadman: %s", summary)
     if summary["action"] == "qualify":

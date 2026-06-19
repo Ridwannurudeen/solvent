@@ -2,7 +2,13 @@ import json
 from datetime import datetime, timezone
 
 from solvent.receipts.chain import ReceiptChain
-from solvent.receipts.server import load_entries, state, summary, verify
+from solvent.receipts.server import (
+    inference_proofs,
+    load_entries,
+    state,
+    summary,
+    verify,
+)
 
 
 def _seed(path):
@@ -51,6 +57,31 @@ def test_summary_reports_latest(tmp_path):
     assert s["chain_ok"] is True
     assert s["latest_equity_usd"] == 305.0
     assert s["latest_regime"] == "risk-on"
+
+
+def test_inference_proofs_reports_proof_receipts(tmp_path):
+    p = tmp_path / "receipts.jsonl"
+    chain = ReceiptChain(p)
+    proof = {"schema": "solvent.inference-proof.v1", "proof_hash": "0xabc"}
+    rec = chain.append(
+        ts="2026-06-24T12:00:00+00:00",
+        phase="cycle_summary",
+        cycle_id="20260624T12",
+        inference_proof=proof,
+        regime="risk-off",
+    )
+
+    out = inference_proofs(p)
+
+    assert out == [
+        {
+            "seq": rec.seq,
+            "phase": "cycle_summary",
+            "cycle_id": "20260624T12",
+            "receipt_hash": rec.hash,
+            "proof": proof,
+        }
+    ]
 
 
 def test_summary_ignores_latest_execution_seal(tmp_path):

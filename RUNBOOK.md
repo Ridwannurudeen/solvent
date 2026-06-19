@@ -1,19 +1,17 @@
 # SOLVENT — go-live runbook
 
-The build is running in **paper** mode on the public VPS, with BSC mainnet
-identity, anchoring, Track 1 registration, and one isolated live rehearsal
-already completed. The remaining live-production switch is still gated because
-it moves real money and must not mix live wallet accounting with the public
-paper-mode data directory.
+The build is running in **live rehearsal** mode on the public VPS, with BSC
+mainnet identity, anchoring, Track 1 registration, live wallet accounting, and
+TWAK execution wired. The scored leaderboard window starts June 22; do not
+present pre-window rehearsal PnL as scored-week PnL.
 
 Host: `root@75.119.153.252`, agent runs as the **`solvent`** user, and every
-systemd unit loads `/opt/solvent/solvent.env`. Current unit templates read both
-`SOLVENT_MODE` and `SOLVENT_DATA_DIR`. For live mode, set `SOLVENT_DATA_DIR` to
-an isolated directory such as `/opt/solvent/data-live`; do not point live mode
-at the paper dashboard directory.
+systemd unit loads `/opt/solvent/solvent.env`. Current production state uses
+`SOLVENT_MODE=live` and `SOLVENT_DATA_DIR=/opt/solvent/data-prod`; do not point
+live mode at an old paper directory.
 
-The concise cutover checklist is in `LIVE_CUTOVER.md`; this runbook keeps the
-full setup and recovery context.
+The cutover checklist in `LIVE_CUTOVER.md` is retained as an operator recovery
+checklist; this runbook keeps the full setup and recovery context.
 
 For no-broadcast readiness checks, use:
 
@@ -86,15 +84,15 @@ gas before registration or anchoring can mine.
 ```bash
 cd /opt/solvent
 sudo -u solvent -H env SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet \
-  .venv/bin/python -m solvent.receipts.anchor --data-dir /opt/solvent/data --register
+  .venv/bin/python -m solvent.receipts.anchor --data-dir /opt/solvent/data-prod --register
 # -> prints SOLVENT_AGENT_ID=<n> ; add the three vars below to solvent.env:
 # SOLVENT_ANCHOR_BACKEND=twak
 # SOLVENT_BSC_NETWORK=bsc-mainnet
 # SOLVENT_AGENT_ID=<n>
 # Then fire the first anchor:
 sudo -u solvent -H env SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet SOLVENT_AGENT_ID=<n> \
-  .venv/bin/python -m solvent.receipts.anchor --data-dir /opt/solvent/data
-sudo systemctl enable --now solvent-anchor.timer     # daily 23:00 UTC
+  .venv/bin/python -m solvent.receipts.anchor --data-dir /opt/solvent/data-prod --update-existing
+sudo systemctl enable --now solvent-anchor.timer     # daily 23:55 UTC
 ```
 
 ## Step 4 — Track 1 competition registration
@@ -124,10 +122,10 @@ If the quote returns sensible token addresses/amounts, add the live block to
 
 ```
 SOLVENT_MODE=live
-SOLVENT_DATA_DIR=/opt/solvent/data-live
+SOLVENT_DATA_DIR=/opt/solvent/data-prod
 SOLVENT_RISK_PROFILE=safety
 SOLVENT_ADAPTIVE_PROFILE=1
-SOLVENT_PRETRADE_ANCHOR=0
+SOLVENT_PRETRADE_ANCHOR=1
 SOLVENT_PRIVATE_KEY=0x...
 SOLVENT_WALLET_PASSWORD=...
 SOLVENT_TRADE_NETWORK=bsc-mainnet
@@ -147,8 +145,8 @@ sizing and should be done only as an explicit cutover decision before the
 scored window.
 
 `SOLVENT_PRETRADE_ANCHOR=1` adds an ERC-8004 metadata tx before each TWAK swap.
-Leave it unset or `0` unless you deliberately choose the extra gas/latency for
-anti-hindsight proof.
+Production proof mode enables it so the pre-trade commit is on-chain before
+execution.
 
 `SOLVENT_ADAPTIVE_PROFILE=1` keeps sleeve risk dynamic within the same max
 drawdown, kill-switch, and daily requirements. It selects conservative profile
@@ -161,6 +159,7 @@ Fire one live cycle immediately instead of waiting for the hourly timer:
 sudo systemctl start solvent.service
 journalctl -u solvent.service -n 40 --no-pager
 curl -s https://solvent.gudman.xyz/state    # holdings now read from chain
+curl -s https://solvent.gudman.xyz/signal   # latest ERC-8183-ready signal
 ```
 
 > Rehearsal safeguard (optional): the default `safety` profile sleeve target is
@@ -180,6 +179,22 @@ sudo systemctl enable --now solvent-scan.timer
 sudo systemctl list-timers 'solvent*' --no-pager
 ```
 
+## ERC-8183 signal provider
+
+The signal payload is public at `/signal`. To sell the same payload through the
+BNB Agent SDK ERC-8183 flow, enable the provider service after wallet env is
+present:
+
+```bash
+sudo systemctl enable --now solvent-erc8183.service
+curl -s https://solvent.gudman.xyz/erc8183/status
+```
+
+Funded ERC-8183 jobs assigned to the agent wallet are processed by
+`solvent.commerce.server`; the job response is the latest
+`solvent.daily-regime-signal` payload, and the SDK submits a
+`DeliverableManifest` hash on-chain.
+
 ## Verify go-live succeeded
 
 - `https://solvent.gudman.xyz` — equity flat→moving, holdings from chain, anchor panel populated.
@@ -196,14 +211,14 @@ BSC wallet history.
 
 ```bash
 sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.exec_recovery \
-  --data-dir /opt/solvent/data-live list-unresolved
+  --data-dir /opt/solvent/data-prod list-unresolved
 ```
 
 If the transaction mined:
 
 ```bash
 sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.exec_recovery \
-  --data-dir /opt/solvent/data-live mark-confirmed \
+  --data-dir /opt/solvent/data-prod mark-confirmed \
   --key '<journal-key>' --tx-hash 0x... --mined-at 2026-06-22T20:05:00Z
 ```
 
@@ -211,7 +226,7 @@ If no matching successful swap exists:
 
 ```bash
 sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.exec_recovery \
-  --data-dir /opt/solvent/data-live mark-failed \
+  --data-dir /opt/solvent/data-prod mark-failed \
   --key '<journal-key>' --reason 'Checked BscScan and wallet history; no matching successful swap.'
 ```
 

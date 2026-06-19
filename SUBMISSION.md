@@ -14,6 +14,8 @@ SOLVENT is a glass-box BSC trading agent: it reads CMC market data, decides unde
 - Public receipt API: https://solvent.gudman.xyz/receipts
 - Public verifier: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
+- ERC-8183 signal payload: https://solvent.gudman.xyz/signal
+- Inference proofs: https://solvent.gudman.xyz/inference-proofs
 - Evidence page: https://solvent.gudman.xyz/proof
 - GitHub: pending public release approval
 - Demo video: pending recording
@@ -25,6 +27,8 @@ SOLVENT is a glass-box BSC trading agent: it reads CMC market data, decides unde
 - ERC-8004 registration tx: `0xda8461a78cc715964a8d653a6cf8a1968119516e443475f6ef5ca46c4eaa90b6`
 - First receipt-chain anchor tx: `0x01a50c38abfc5b577683b80d680b7a9e5e6c81e30cdcd0d81689c69afa1104ba`
 - Anchored head for `2026-06-16`: `0x986790cac174dfccbdfae2ffebd0bea37f90b12d35d3431f7f3275dc5a5fddb0`
+- Production anchor tx for `2026-06-18`: `0xec2fc445697704bd3dccb00d403a92e89f3ca6516a85751e135d594b11659319`
+- Production anchored head for `2026-06-18`: `0x03c442d20351f5970e67894e4b0c45a2eab09543fc8b67b6b09eb1c3fe1aa617`
 - Track 1 competition registration tx: `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`
 - Isolated TWAK live rehearsal tx: `0x2254bf01ea6bfa8d610c9bed916dbf19ec6db81d6068f1e0b0802a58cad50ac4`
 - Isolated CMC x402 receipt head: `0x282364a912a5090e83b4b522e5470ddba02203b3b3c77755e96bc515f89ba744`
@@ -47,6 +51,7 @@ The advisor layer is optional and can only de-risk; it cannot force or enlarge a
 - CoinMarketCap: live mode uses CMC Agent Hub/x402 MCP calls for global metrics, quotes, and conditional derivatives data.
 - Trust Wallet Agent Kit: TWAK wallet/keychain is used for local self-custody signing, and `TwakExecutor` is the sole live execution path.
 - BNB AI Agent SDK: ERC-8004 identity and daily receipt-chain anchors provide persistent on-chain proof.
+- BNB Agent SDK ERC-8183: the latest regime read can be sold as a paid signal deliverable whose manifest hash is submitted on-chain.
 - BNB Chain: all registration, anchors, and planned live trades are on BSC mainnet.
 
 ## Verification
@@ -63,8 +68,8 @@ The verifier recomputes the public receipt hash chain and prints the head hash. 
 ## Current Gates
 
 - Rotate exposed TWAK API credentials before live trading.
-- Top up the wallet to the final scored-week stake.
-- Keep live mode on an isolated `SOLVENT_DATA_DIR` so paper and live accounting never mix.
+- Keep the wallet funded with the final scored-week stake and gas.
+- Keep live mode isolated at `/opt/solvent/data-prod` so paper and live accounting never mix.
 - Make the GitHub repo public after explicit approval.
 - Record and attach the demo video.
 

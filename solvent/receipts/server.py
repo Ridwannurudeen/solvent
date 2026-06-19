@@ -15,6 +15,7 @@ from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from ..commerce.signal import build_signal_payload
 from ..kernel.rules import RiskConfig
 from ..ops.watchdog import heartbeat_age
 from .chain import verify_chain
@@ -144,6 +145,24 @@ def summary(path: Path) -> dict:
     }
 
 
+def inference_proofs(path: Path) -> list[dict]:
+    proofs = []
+    for entry in load_entries(path):
+        receipt = entry["receipt"]
+        proof = receipt.get("inference_proof") or {}
+        if proof:
+            proofs.append(
+                {
+                    "seq": receipt["seq"],
+                    "phase": receipt.get("phase", "cycle_summary"),
+                    "cycle_id": receipt.get("cycle_id"),
+                    "receipt_hash": entry["hash"],
+                    "proof": proof,
+                }
+            )
+    return proofs
+
+
 class ReceiptHandler(BaseHTTPRequestHandler):
     data_dir: Path  # set on the class before serving
 
@@ -170,6 +189,13 @@ class ReceiptHandler(BaseHTTPRequestHandler):
             self._send(verify(self.receipts_path))
         elif route == "/state":
             self._send(state(self.data_dir))
+        elif route == "/inference-proofs":
+            self._send(inference_proofs(self.receipts_path))
+        elif route == "/signal":
+            try:
+                self._send(build_signal_payload(self.data_dir))
+            except ValueError as exc:
+                self._send({"error": str(exc)}, status=404)
         else:
             self._send({"error": "not found"}, status=404)
 

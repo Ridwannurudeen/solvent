@@ -4,9 +4,9 @@
 
 An autonomous BNB Smart Chain trading agent whose distinguishing feature is **honesty you can verify**: every decision the agent makes is written as a signed, hash-chained **decision receipt** — what data it bought, what that cost, the regime it inferred, its thesis, the intents it produced, and the resulting transactions. The chain head is anchored on-chain daily under the agent's ERC-8004 identity, so the whole record is tamper-evident and publicly auditable.
 
-**Live (paper mode + mainnet proof):** https://solvent.gudman.xyz — equity vs BNB buy-and-hold, current barbell allocation, liveness heartbeat, a live `CHAIN VERIFIED` badge, mainnet ERC-8004 anchors, and the full receipt stream.
+**Live BSC mainnet agent:** https://solvent.gudman.xyz — live wallet holdings, equity vs BNB buy-and-hold, current barbell allocation, liveness heartbeat, a live `CHAIN VERIFIED` badge, mainnet ERC-8004 anchors, and the full receipt stream.
 
-Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state)
+Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state) · [`/signal`](https://solvent.gudman.xyz/signal) · [`/inference-proofs`](https://solvent.gudman.xyz/inference-proofs)
 
 Submission evidence packet: [`EVIDENCE.md`](EVIDENCE.md)
 Live cutover checklist: [`LIVE_CUTOVER.md`](LIVE_CUTOVER.md)
@@ -37,9 +37,12 @@ solvent/
     livebook.py    live on-chain holdings reader (floor stables + open sleeve)
   receipts/
     chain.py       hash-chained receipt log + verify_chain()
-    pretrade.py    optional ERC-8004 pre-trade commit publisher (off by default)
-    server.py      read-only HTTP API (/, /receipts, /verify, /state, /summary)
+    pretrade.py    optional ERC-8004 pre-trade commit publisher
+    server.py      read-only HTTP API (/, /receipts, /verify, /state, /signal)
     anchor.py      daily ERC-8004 on-chain anchor of the chain head
+  commerce/
+    signal.py      ERC-8183-ready paid regime signal deliverable
+    server.py      FastAPI ERC-8183 provider for funded buyer jobs
   ops/           deadman, watchdog, alerts, preflight, readiness, execution recovery
   research/      historical/stress backtests for comparing risk profiles
   engine.py      run_cycle(): one decision heartbeat
@@ -88,7 +91,19 @@ python verify_receipts.py                         # recompute the chain from the
 
 The standalone verifier recomputes every receipt hash from genesis and checks each `prev_hash` link; the head it prints must match `/verify` (which runs the same check server-side) and, once the ERC-8004 anchor is registered, the head posted on-chain daily — closing the loop from public log → independently recomputed chain → on-chain commitment.
 
-For the strongest anti-hindsight mode, `SOLVENT_PRETRADE_ANCHOR=1` publishes each pre-trade commit hash to ERC-8004 metadata before the TWAK swap. It is off by default because it adds an on-chain transaction before every trade.
+For the strongest anti-hindsight mode, `SOLVENT_PRETRADE_ANCHOR=1` publishes each pre-trade commit hash to ERC-8004 metadata before the TWAK swap. It is enabled in production proof mode via systemd override because it adds one cheap BSC metadata transaction before every trade.
+
+## Inference proofs and ERC-8183 signal sales
+
+Every new decision receipt includes a hash-bound inference proof packet:
+
+- `input_hash`: stable hash of the exact signal snapshot, deterministic regime, active risk profile, and open-position context.
+- `output_hash`: stable hash of the effective regime and optional advisor output.
+- `proof_hash`: the verifier-facing commitment tying mode, model/kernel ID, input hash, and output hash together.
+
+This is not a TEE attestation; it is a proof-of-inference style verification packet that lets reviewers prove the regime read was bound into the receipt chain rather than written after the fact. Public proofs are exposed at `/inference-proofs`.
+
+SOLVENT also exposes its latest daily regime read as an ERC-8183-ready paid signal. `/signal` returns a verifiable `solvent.daily-regime-signal` payload whose `signal_hash` binds to the latest receipt hash, current chain head, latest anchor, and inference proof hash. For paid buyers, `solvent.commerce.server` runs the BNB Agent SDK ERC-8183 provider: funded jobs assigned to the agent wallet receive the same signal as a `DeliverableManifest`, and `ERC8183JobOps.submit_result()` submits the manifest hash on-chain.
 
 ## ERC-8004 on-chain anchoring
 
@@ -113,13 +128,14 @@ Requires Python ≥ 3.12.
 
 ```bash
 pip install -e .
-python -m pytest -q                                   # 146 tests
+python -m pytest -q                                   # 183 tests
 python -m solvent.run --mode paper --data-dir ./data --once     # one cycle
 python -m solvent.run --mode paper --data-dir ./data --loop 3600  # hourly
 python -m solvent.receipts.server --data-dir ./data --port 3078   # serve the glass box
 python -m solvent.ops.readiness --data-dir ./data --profile submission
 python -m solvent.research.backtest --days 30 --interval 1h       # compare risk profiles
 python -m solvent.research.scan_universe --json                   # review-only candidate scanner
+python -m solvent.commerce.signal --data-dir ./data               # latest signal payload
 ```
 
 Paper mode fills instantly at signal price with a 0.25% fee haircut, seeded with $300 USDT.
@@ -132,10 +148,10 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, receipt hash-chain, read-only API, ERC-8004 anchor, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), and risk-profile backtests. **175 tests, ruff-clean.**
-- **Live now:** paper agent running hourly on a VPS with the dashboard public at solvent.gudman.xyz; receipts accumulating autonomously; ERC-8004 identity `136384` and daily anchors are live on BSC mainnet.
+- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, receipt hash-chain, proof-of-inference packets, ERC-8183 signal provider, read-only API, ERC-8004 anchors, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), and risk-profile backtests. **183 tests, ruff-clean.**
+- **Live now:** production live-mode rehearsal is running hourly on BSC mainnet from `/opt/solvent/data-prod`; public holdings are read from the funded TWAK wallet; ERC-8004 identity `136384` and receipt-chain anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
-- **Live mode wired (credential-gated):** `--mode live` assembles the real stack — CMC x402 paid signals (`CMCSource`), TWAK execution (`TwakExecutor`), and on-chain balance reads (`LiveBook`) — and fails fast without the x402 signer key plus TWAK wallet/keychain access. TWAK auth/wallet/keychain, quote-only swaps, ERC-8004 registration, Track 1 registration, the daily anchor timer, and an isolated $2 mainnet live rehearsal are verified on BSC mainnet. Remaining live-production gates: keep the x402 signer funded with BSC USD1, reset or isolate live accounting state, and explicitly flip `SOLVENT_MODE=live`.
+- **Scored-window gate:** the live stack is active before the June 22 trading window; do not present pre-window rehearsal PnL as scored-week PnL. Remaining gates are operational: keep the wallet funded, keep x402 USD1 available, keep watchdog/deadman timers healthy, and publish the repo/demo only after approval.
 
 ## BNB Hack alignment
 
@@ -145,9 +161,9 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 | Reads markets via CMC | Live mode uses `CMCSource` through the x402 MCP client, with `get_global_metrics_latest`, `get_crypto_quotes_latest`, and conditional derivatives metrics recorded per receipt. |
 | Signs/executes via TWAK | `TwakExecutor` is the only live execution path; quote-only BSC swaps are verified on the VPS. |
 | User-defined rules | Risk constitution enforces allowlist, one-position cap, floor reserve, per-trade sizing, slippage, stop, drawdown kill switch, and lock-in ratchet. |
-| Live BSC trading week | Registered and live-rehearsed; ready after x402 signer USD1 funding, live-accounting cutover, and the explicit live-mode flip. |
+| Live BSC trading week | Registered and already running live-mode rehearsal on BSC mainnet; scored-window results begin June 22. |
 | On-chain Track 1 registration | Registered in the BNB Hack competition contract: `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`. |
-| On-chain proof | ERC-8004 agent `136384` on BSC mainnet with a live daily receipt-chain anchor. |
+| On-chain proof | ERC-8004 agent `136384` on BSC mainnet with daily receipt-chain anchors plus optional pre-trade anchors. |
 | Submission package | Public repo and demo video are still required before DoraHacks submission; repo remains private until explicitly approved for publication. |
 
 ## Rubric map
@@ -160,4 +176,4 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 | Native x402 | per-call data spend metered into every receipt |
 | Originality | glass-box receipts + ERC-8004 trading identity — an agent a self-custody user can actually audit |
 | CMC Agent Hub | multi-endpoint signals with per-decision cost metering |
-| BNB AI Agent SDK | ERC-8004 identity + daily on-chain receipt anchors |
+| BNB AI Agent SDK | ERC-8004 identity + daily/on-demand receipt anchors + ERC-8183 signal sales |

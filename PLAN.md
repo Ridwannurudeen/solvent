@@ -17,7 +17,7 @@
 |---|---|---|---|
 | Best Use of TWAK (Track 1 only) | $2,000 | TWAK as *sole* execution layer across 3 surfaces (Agent Wallet autonomous mode, CLI, MCP), clean local signing end-to-end, native Binance-x402 in the loop, codified guardrails | **P0 — primary** |
 | Best Use of CMC Agent Hub | $2,000 | Multi-endpoint usage (funding, OI, Fear & Greed, TA, narratives) via both MCP and x402 keyless, with per-call cost metering surfaced in receipts | **P0 — primary** |
-| Best Use of BNB AI Agent SDK | $2,000 | ERC-8004 identity + on-chain receipt anchoring; stretch: ERC-8183 signal-selling. SDK has zero trading code, so few teams will use it non-cosmetically | **P0 — primary** |
+| Best Use of BNB AI Agent SDK | $2,000 | ERC-8004 identity + on-chain receipt anchoring + ERC-8183 signal-selling. SDK has zero trading code, so few teams will use it non-cosmetically | **P0 — primary** |
 | Track 1 placement (5 winners) | $2k–$10k | Barbell engine: structurally DQ-proof floor + concentrated momentum sleeve for right-tail return | **P1 — bounded lottery** |
 
 Realistic outcome band: $2k–$16k. The specials are rubric-judged craft (we control them); Track 1 rank is partly the market's mood that week (we don't).
@@ -147,7 +147,7 @@ Read-only static-ish page fed by the receipt log (same nginx/TLS/systemd pattern
 - [ ] `exec/`: TWAK wrapper — idempotency keys, confirmation polling, one-tx-per-trade invariant
 - [ ] `signals/`: CMC MCP + x402 clients with caching, cost logging, staleness flags
 - [ ] **Ops armor now:** systemd unit + watchdog + auto-restart + heartbeat + "did-I-trade-today" deadman with independent fallback-trade path + Telegram alert bot (trade/error/guardrail/heartbeat-loss)
-- **Exit criteria:** full loop runs hourly, unattended, in paper mode on the VPS; kernel test suite green; kill the process manually → it restarts and reports.
+- **Exit criteria:** full loop runs hourly, unattended, in live rehearsal mode on the VPS; kernel test suite green; kill the process manually → it restarts and reports.
 
 ### Phase 2 — Showpieces (Jun 15–17) · *live small-stake trading starts now = public track record (NEXUS bar)*
 - [ ] Receipt engine: schema, hash chain, public log endpoint
@@ -184,7 +184,7 @@ Daily 10-minute runbook (UTC morning): qualification trade confirmed for yesterd
 | Originality + relevance | 10 | Glass-box receipts: the agent a self-custody user could actually audit, then trust |
 | Demo | 5 | Live dashboard + end-to-end video with on-chain proof |
 | CMC Agent Hub special | — | 5+ endpoint families via MCP **and** x402, costs metered per decision |
-| BNB SDK special | — | ERC-8004 mainnet identity + daily receipt anchors; stretch: ERC-8183 |
+| BNB SDK special | — | ERC-8004 mainnet identity + daily/pre-trade receipt anchors + ERC-8183 |
 
 ## 9. Budget
 
@@ -212,7 +212,7 @@ Daily 10-minute runbook (UTC morning): qualification trade confirmed for yesterd
 | Copycats after repo goes public | M×L | First-mover + live receipt history is unforgeable; velocity is the moat |
 
 ## 11. Stretch goals (only after Phase 3 exit criteria pass)
-1. **ERC-8183 signal stall** — SOLVENT sells its daily regime read to other agents via SDK escrow (near-locks the BNB SDK special).
+1. **ERC-8183 signal sale** — SOLVENT sells its daily regime read to other agents via SDK escrow (near-locks the BNB SDK special).
 2. **Personality layer** — daily self-narration from receipts ("Spent $0.34 on data, learned nothing worth a trade, stayed home").
 3. **Receipt verifier CLI** — one-command public auditor: recompute chain, check anchors (`python -m solvent.verify`).
 

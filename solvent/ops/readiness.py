@@ -135,6 +135,35 @@ def _public_checks(
         )
     )
 
+    ok, signal_payload, detail = _fetch_json(fetcher, f"{base}/signal")
+    public["signal"] = signal_payload
+    checks.append(
+        _check(
+            "public_signal_payload",
+            ok
+            and bool(
+                signal_payload
+                and signal_payload.get("schema") == "solvent.erc8183.signal.v1"
+                and signal_payload.get("signal_hash")
+            ),
+            detail
+            if not signal_payload
+            else f"signal_hash={signal_payload.get('signal_hash')}",
+        )
+    )
+
+    ok, proofs_payload, detail = _fetch_json(fetcher, f"{base}/inference-proofs")
+    public["inference_proofs"] = proofs_payload
+    checks.append(
+        _check(
+            "public_inference_proofs",
+            ok and isinstance(proofs_payload, list),
+            detail
+            if not isinstance(proofs_payload, list)
+            else f"{len(proofs_payload)} proofs",
+        )
+    )
+
     ok, proof_body = _fetch_text(fetcher, f"{base}/proof")
     public["proof_present"] = ok
     checks.append(
@@ -200,7 +229,7 @@ def readiness(
         "make GitHub repository public",
         "record and upload demo video",
         "submit DoraHacks BUIDL",
-        "flip production live trading mode",
+        "change scored-week stake or risk profile",
     ]
     required_checks = [c for c in checks if c["required"]]
     return {

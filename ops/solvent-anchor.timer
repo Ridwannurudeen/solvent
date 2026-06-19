@@ -1,10 +1,10 @@
 [Unit]
-Description=Anchor the SOLVENT receipt chain head daily at 23:00 UTC
+Description=Anchor the SOLVENT receipt chain head daily at 23:55 UTC
 # After the trading day's receipts are written, before the next UTC day.
-# Explicit UTC suffix → fires at 23:00 UTC regardless of host timezone.
+# Explicit UTC suffix fires after the 23:00 UTC decision cycle.
 
 [Timer]
-OnCalendar=*-*-* 23:00:00 UTC
+OnCalendar=*-*-* 23:55:00 UTC
 Persistent=true
 
 [Install]

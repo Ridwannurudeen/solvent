@@ -167,6 +167,42 @@ def test_idempotent_same_day(tmp_path):
     assert len(reg.calls) == 1
 
 
+def test_same_day_older_head_requires_explicit_update(tmp_path):
+    chain = _seeded_chain(tmp_path)
+    reg = _Registry()
+    markers = AnchorMarkers(tmp_path / "anchors.json")
+    run_anchor(chain=chain, registry=reg, agent_id=7, markers=markers, now=DAY)
+    chain.append(ts="2026-06-24T13:00:00+00:00", regime="neutral")
+
+    out = run_anchor(chain=chain, registry=reg, agent_id=7, markers=markers, now=DAY)
+
+    assert out["action"] == "none"
+    assert out["reason"] == "already anchored today with older head"
+    assert out["current_head_hash"] == chain.head_hash
+    assert len(reg.calls) == 1
+
+
+def test_same_day_older_head_can_be_updated(tmp_path):
+    chain = _seeded_chain(tmp_path)
+    reg = _Registry()
+    markers = AnchorMarkers(tmp_path / "anchors.json")
+    run_anchor(chain=chain, registry=reg, agent_id=7, markers=markers, now=DAY)
+    chain.append(ts="2026-06-24T13:00:00+00:00", regime="neutral")
+
+    out = run_anchor(
+        chain=chain,
+        registry=reg,
+        agent_id=7,
+        markers=markers,
+        now=DAY,
+        update_existing=True,
+    )
+
+    assert out["action"] == "update_anchor"
+    assert out["head_hash"] == chain.head_hash
+    assert len(reg.calls) == 2
+
+
 def test_markers_persist_across_instances(tmp_path):
     chain = _seeded_chain(tmp_path)
     reg = _Registry()

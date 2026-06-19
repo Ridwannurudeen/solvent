@@ -55,6 +55,39 @@ def test_deadman_emits_pre_trade_and_seal_receipts(tmp_path):
     assert entries[1]["pre_trade_hash"]
 
 
+def test_deadman_pretrade_publisher_runs_before_execution(tmp_path):
+    class Publisher:
+        def __init__(self):
+            self.calls = []
+
+        def publish(self, *, cycle_id, intent_key, commit_hash):
+            self.calls.append((cycle_id, intent_key, commit_hash))
+            return "0x" + "55" * 32
+
+    journal = _journal(tmp_path)
+    receipts = ReceiptChain(tmp_path / "receipts.jsonl")
+    publisher = Publisher()
+    run_deadman(
+        executor=PaperExecutor(journal),
+        journal=journal,
+        cfg=CFG,
+        receipts=receipts,
+        pretrade_publisher=publisher,
+        now=_at(CFG.qual_deadline_hour_utc + 1),
+    )
+    entries = [
+        json.loads(line)["receipt"]
+        for line in (tmp_path / "receipts.jsonl").read_text().splitlines()
+    ]
+
+    assert len(publisher.calls) == 1
+    assert (
+        publisher.calls[0][2]
+        == json.loads((tmp_path / "receipts.jsonl").read_text().splitlines()[0])["hash"]
+    )
+    assert entries[1]["execution_seal"]["pre_trade_anchor_tx_hash"] == "0x" + "55" * 32
+
+
 def test_noop_before_deadline(tmp_path):
     journal = _journal(tmp_path)
     summary = run_deadman(
@@ -99,7 +132,14 @@ def test_independent_of_signals():
     import inspect
 
     params = set(inspect.signature(run_deadman).parameters)
-    assert params == {"executor", "journal", "cfg", "receipts", "now"}
+    assert params == {
+        "executor",
+        "journal",
+        "cfg",
+        "receipts",
+        "pretrade_publisher",
+        "now",
+    }
     assert "source" not in params and "signals" not in params
 
 

@@ -10,6 +10,7 @@ UNITS=(
   solvent-deadman.service solvent-deadman.timer
   solvent-watchdog.service solvent-watchdog.timer
   solvent-web.service
+  solvent-erc8183.service
   solvent-anchor.service solvent-anchor.timer
 )
 
@@ -40,6 +41,11 @@ done
 
 systemctl daemon-reload
 systemctl enable --now solvent-web.service solvent.timer solvent-deadman.timer solvent-watchdog.timer
+if [[ "${SOLVENT_ERC8183_ENABLED:-0}" == "1" ]]; then
+  systemctl enable --now solvent-erc8183.service
+else
+  echo "solvent-erc8183.service installed but not enabled; set SOLVENT_ERC8183_ENABLED=1 to sell signals via ERC-8183."
+fi
 echo "solvent-scan.timer installed but not enabled; use it instead of solvent.timer for 5-minute scanning."
 if [[ -n "${SOLVENT_AGENT_ID:-}" ]]; then
   systemctl enable --now solvent-anchor.timer

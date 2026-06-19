@@ -137,6 +137,9 @@ class AnchorMarkers:
     def has(self, day: str) -> bool:
         return day in self.days
 
+    def get(self, day: str) -> dict | None:
+        return self.days.get(day)
+
     def record(self, day: str, head_hash: str, tx_hash: str) -> None:
         self.days[day] = {"head_hash": head_hash, "tx_hash": tx_hash}
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -150,6 +153,7 @@ def run_anchor(
     agent_id: int,
     markers: AnchorMarkers,
     now: datetime | None = None,
+    update_existing: bool = False,
 ) -> dict:
     """Post today's chain head on-chain if not already anchored.
 
@@ -159,16 +163,27 @@ def run_anchor(
     now = now or datetime.now(timezone.utc)
     day = now.strftime("%Y-%m-%d")
 
-    if markers.has(day):
-        return {"action": "none", "reason": "already anchored today", "day": day}
     head = chain.head_hash
     if head == GENESIS_HASH:
         return {"action": "none", "reason": "no receipts to anchor", "day": day}
+    existing = markers.get(day)
+    if existing:
+        if existing.get("head_hash") == head:
+            return {"action": "none", "reason": "already anchored today", "day": day}
+        if not update_existing:
+            return {
+                "action": "none",
+                "reason": "already anchored today with older head",
+                "day": day,
+                "anchored_head_hash": existing.get("head_hash"),
+                "current_head_hash": head,
+            }
 
     result = registry.set_metadata(agent_id, anchor_key(day), head)
     tx_hash = result.get("transactionHash")
     markers.record(day, head, tx_hash)
-    return {"action": "anchor", "tx_hash": tx_hash, "head_hash": head, "day": day}
+    action = "update_anchor" if existing else "anchor"
+    return {"action": action, "tx_hash": tx_hash, "head_hash": head, "day": day}
 
 
 def _build_registry(network: str):
@@ -220,6 +235,11 @@ def main() -> int:
         action="store_true",
         help="one-time: register the ERC-8004 identity and print the agent ID",
     )
+    parser.add_argument(
+        "--update-existing",
+        action="store_true",
+        help="re-anchor today if receipts were appended after an earlier anchor",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -241,10 +261,14 @@ def main() -> int:
     chain = ReceiptChain(args.data_dir / "receipts.jsonl")
     markers = AnchorMarkers(args.data_dir / "anchors.json")
     summary = run_anchor(
-        chain=chain, registry=registry, agent_id=int(agent_id_env), markers=markers
+        chain=chain,
+        registry=registry,
+        agent_id=int(agent_id_env),
+        markers=markers,
+        update_existing=args.update_existing,
     )
     logger.info("anchor: %s", summary)
-    if summary["action"] == "anchor":
+    if summary["action"] in {"anchor", "update_anchor"}:
         alert(f"SOLVENT ANCHOR [{network}] {json.dumps(summary)}")
     return 0
 

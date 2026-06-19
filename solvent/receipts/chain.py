@@ -36,6 +36,7 @@ class Receipt:
     execution_seal: dict = field(default_factory=dict)
     data_purchases: list[DataPurchase] = field(default_factory=list)
     signals: dict = field(default_factory=dict)
+    inference_proof: dict = field(default_factory=dict)
     regime: str = ""
     thesis: str = ""
     intents: list[dict] = field(default_factory=list)

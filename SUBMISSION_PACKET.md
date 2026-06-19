@@ -34,6 +34,8 @@ on-chain under ERC-8004 agent `136384`.
 - Receipts: https://solvent.gudman.xyz/receipts
 - Verifier API: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
+- ERC-8183 signal payload: https://solvent.gudman.xyz/signal
+- Inference proofs: https://solvent.gudman.xyz/inference-proofs
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
 - Evidence page: https://solvent.gudman.xyz/proof
 
@@ -61,6 +63,10 @@ automation.
   `0x01a50c38abfc5b577683b80d680b7a9e5e6c81e30cdcd0d81689c69afa1104ba`
 - 2026-06-16 anchored head:
   `0x986790cac174dfccbdfae2ffebd0bea37f90b12d35d3431f7f3275dc5a5fddb0`
+- 2026-06-18 production anchor tx:
+  `0xec2fc445697704bd3dccb00d403a92e89f3ca6516a85751e135d594b11659319`
+- 2026-06-18 production anchored head:
+  `0x03c442d20351f5970e67894e4b0c45a2eab09543fc8b67b6b09eb1c3fe1aa617`
 - TWAK live rehearsal swap tx:
   `0x2254bf01ea6bfa8d610c9bed916dbf19ec6db81d6068f1e0b0802a58cad50ac4`
 - Live CMC x402 receipt head:
@@ -85,8 +91,11 @@ drawdown gate:
   and 48h minimum hold before momentum-decay exits. It is activated only by
   explicit runtime profile selection.
 - Money-moving intents produce a pre-trade commit receipt before execution and
-  an execution seal after the result. Optional ERC-8004 pre-trade anchoring is
-  available but remains explicit because it adds a tx before every swap.
+  an execution seal after the result. Production proof mode can publish the
+  pre-trade commit hash to ERC-8004 before the TWAK swap.
+- New receipts include proof-of-inference style packets that hash-bind the
+  signal input, effective regime output, and model/kernel ID into the receipt
+  chain.
 
 The optional advisor can only de-risk. It cannot force a larger trade or bypass
 the deterministic kernel.
@@ -97,8 +106,9 @@ the deterministic kernel.
   decision receipt.
 - **Trust Wallet Agent Kit:** TWAK is the only live execution path, using local
   self-custody signing.
-- **BNB AI Agent SDK / ERC-8004:** agent identity `136384` anchors the receipt
-  chain head daily.
+- **BNB AI Agent SDK / ERC-8004 / ERC-8183:** agent identity `136384` anchors
+  the receipt chain head daily, pre-trade anchors can seal commit hashes before
+  swaps, and the latest regime signal can be sold as an ERC-8183 deliverable.
 - **BNB Chain:** registrations, anchors, rehearsals, and planned scored trades
   are on BSC mainnet.
 
@@ -109,13 +119,14 @@ the deterministic kernel.
 3. A `pre_trade_commit` followed by an `execution_seal`.
 4. CMC x402 receipt or live proof showing non-zero data cost.
 5. TWAK live rehearsal tx on BscScan.
-6. `python verify_receipts.py` matching `/verify`.
-7. ERC-8004 anchor in `/state` and BscScan.
-8. Strategy/risk constitution in `kernel/rules.py`.
+6. `/inference-proofs` showing input/output/proof hashes.
+7. `/signal` showing the ERC-8183-ready paid signal payload.
+8. `python verify_receipts.py` matching `/verify`.
+9. ERC-8004 anchor in `/state` and BscScan.
+10. Strategy/risk constitution in `kernel/rules.py`.
 
 ## Do Not Claim
 
 - Do not present paper-mode PnL as scored-week live PnL.
 - Do not claim public repo availability before the repo is actually made public.
-- Do not claim every dashboard receipt is live-money execution while production
-  mode is still gated.
+- Do not claim pre-June-22 live rehearsal PnL is scored-week leaderboard PnL.

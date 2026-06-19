@@ -61,6 +61,15 @@ def _fetcher(head_hash):
                     "anchors": [{"day": "2026-06-16"}],
                 }
             )
+        if url.endswith("/signal"):
+            return 200, json.dumps(
+                {
+                    "schema": "solvent.erc8183.signal.v1",
+                    "signal_hash": "0x" + "22" * 32,
+                }
+            )
+        if url.endswith("/inference-proofs"):
+            return 200, json.dumps([])
         if url.endswith("/proof"):
             return 200, "Mainnet evidence ... Track 1 registration"
         raise AssertionError(url)

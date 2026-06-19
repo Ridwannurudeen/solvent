@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from .brain.proof import build_inference_proof
 from .exec.executor import ExecutionResult, Journal, intent_key, intent_payload
 from .kernel.allocator import (
     IntentKind,
@@ -151,6 +152,16 @@ def run_cycle(
         else deterministic_regime
     )
     regime = effective_regime.value
+    active_profile = _risk_profile_name(cfg)
+    inference_proof = build_inference_proof(
+        cycle_id=cycle_id,
+        signals=signals,
+        deterministic_regime=deterministic_regime,
+        effective_regime=effective_regime,
+        active_risk_profile=active_profile,
+        position_symbol=state.position.symbol if state.position is not None else None,
+        advice=advice,
+    )
 
     intents: list[TradeIntent] = decide(
         state, signals, cfg, regime_override=effective_regime
@@ -186,7 +197,9 @@ def run_cycle(
                 },
                 "degraded": signals.degraded,
                 "regime_deterministic": deterministic_regime.value,
+                "active_risk_profile": active_profile,
             },
+            inference_proof=inference_proof,
             regime=regime,
             thesis=intent.reason,
             intents=[payload],
@@ -217,8 +230,10 @@ def run_cycle(
                 "ok": result.ok,
                 "tx_hash": result.tx_hash,
                 "pre_trade_anchor_tx_hash": pre_trade_anchor_tx_hash,
+                "inference_proof_hash": inference_proof["proof_hash"],
                 "detail": result.detail[:500],
             },
+            inference_proof=inference_proof,
             equity_usd=round(equity, 2),
             dq_headroom_pct=round(state.dq_headroom_pct, 4),
         )
@@ -246,7 +261,7 @@ def run_cycle(
             "market_cap_usd": {
                 k: round(v, 2) for k, v in signals.market_cap_usd.items()
             },
-            "active_risk_profile": _risk_profile_name(cfg),
+            "active_risk_profile": active_profile,
             "degraded": signals.degraded,
             "regime_deterministic": deterministic_regime.value,
             "advisor": (
@@ -260,6 +275,7 @@ def run_cycle(
                 else None
             ),
         },
+        inference_proof=inference_proof,
         regime=regime,
         thesis=(advice.thesis if advice is not None else None)
         or "; ".join(i.reason for i in intents)
@@ -283,12 +299,13 @@ def run_cycle(
     summary = {
         "cycle": cycle_id,
         "regime": regime,
-        "active_risk_profile": _risk_profile_name(cfg),
+        "active_risk_profile": active_profile,
         "equity_usd": round(equity, 2),
         "intents": len(intents),
         "executed_ok": sum(1 for e in executions if e.ok),
         "receipt_seq": receipt.seq,
         "receipt_hash": receipt.hash,
+        "inference_proof_hash": inference_proof["proof_hash"],
         "data_cost_usd": round(sum(p.cost_usdc for p in purchases), 4),
         "degraded": signals.degraded,
     }

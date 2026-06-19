@@ -1,7 +1,7 @@
 # Copy to /opt/solvent/solvent.env and fill in. Never commit the real file.
 
-# Run mode: paper (default) | live. Flip to live once the agent wallet is
-# funded and the live credentials are present on the host.
+# Run mode: paper (default for local dev) | live. Production uses live with
+# an isolated SOLVENT_DATA_DIR and funded TWAK wallet.
 SOLVENT_MODE=paper
 SOLVENT_DATA_DIR=/opt/solvent/data
 # safety (default) | tournament_50 | conviction_50 | tournament_60
@@ -40,5 +40,15 @@ SOLVENT_BSC_NETWORK=bsc-mainnet
 # SOLVENT_RECEIPTS_URL=https://solvent.gudman.xyz
 
 # Optional: publish each pre-trade commit hash to ERC-8004 before a TWAK swap.
-# Adds one on-chain metadata tx before every trade; leave off unless explicitly chosen.
-# SOLVENT_PRETRADE_ANCHOR=0
+# Adds one on-chain metadata tx before every trade; production enables this
+# with a systemd override after SOLVENT_AGENT_ID is set.
+# SOLVENT_PRETRADE_ANCHOR=1
+
+# ERC-8183 signal-selling stretch. Buyers create/fund ERC-8183 jobs assigned to
+# the agent wallet; the provider serves the latest regime signal and submits a
+# hash-verifiable deliverable manifest on-chain through the SDK.
+SOLVENT_ERC8183_ENABLED=0
+# SOLVENT_ERC8183_NETWORK=bsc-mainnet
+# SOLVENT_ERC8183_AGENT_URL=https://solvent.gudman.xyz/erc8183
+# SOLVENT_ERC8183_STORAGE_DIR=/opt/solvent/data-prod/erc8183
+# SOLVENT_ERC8183_SERVICE_PRICE=0

@@ -1,0 +1,15 @@
+[Unit]
+Description=SOLVENT ERC-8183 signal provider
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=solvent
+WorkingDirectory=/opt/solvent
+EnvironmentFile=/opt/solvent/solvent.env
+ExecStart=/opt/solvent/.venv/bin/uvicorn solvent.commerce.server:app --host 127.0.0.1 --port 3079
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
