@@ -44,6 +44,9 @@ class StateStore:
     start_equity_usd: float = 0.0
     peak_equity_usd: float = 0.0
     position: dict | None = None  # serialized SleevePosition
+    runtime_status: str = "ACTIVE"
+    halted_at: str | None = None
+    halt_reason: str | None = None
 
     @classmethod
     def load(cls, path: Path) -> "StateStore":
@@ -60,10 +63,20 @@ class StateStore:
                     "start_equity_usd": self.start_equity_usd,
                     "peak_equity_usd": self.peak_equity_usd,
                     "position": self.position,
+                    "runtime_status": self.runtime_status,
+                    "halted_at": self.halted_at,
+                    "halt_reason": self.halt_reason,
                 },
                 indent=1,
             )
         )
+
+    def latch_halt(self, *, now: datetime, reason: str) -> None:
+        if self.runtime_status == "HALTED":
+            return
+        self.runtime_status = "RISK_REDUCING" if self.position else "HALTED"
+        self.halted_at = self.halted_at or now.isoformat()
+        self.halt_reason = reason
 
     def position_obj(self) -> SleevePosition | None:
         if not self.position:
@@ -76,7 +89,10 @@ class StateStore:
 
 
 def compute_equity(
-    holdings: dict[str, float], signals: MarketSignals, stable_symbols: tuple[str, ...]
+    holdings: dict[str, float],
+    signals: MarketSignals,
+    stable_symbols: tuple[str, ...],
+    stable_haircut_pct: float = 0.0,
 ) -> tuple[float, float]:
     """(equity_usd, floor_usd) from symbol->units holdings.
 
@@ -88,8 +104,12 @@ def compute_equity(
     floor = 0.0
     for sym, units in holdings.items():
         if sym in stable_symbols:
-            equity += units
-            floor += units
+            stable_mark = min(float(signals.prices.get(sym, 1.0)), 1.0) * (
+                1.0 - stable_haircut_pct
+            )
+            value = units * stable_mark
+            equity += value
+            floor += value
         else:
             price = signals.prices.get(sym)
             if price is not None:
@@ -118,7 +138,9 @@ def run_cycle(
     day = now.strftime("%Y-%m-%d")
 
     signals, purchases = source.fetch()
-    equity, floor = compute_equity(holdings, signals, cfg.floor_symbols)
+    equity, floor = compute_equity(
+        holdings, signals, cfg.floor_symbols, cfg.stable_haircut_pct
+    )
     _sync_position_notional(store, holdings, signals)
 
     if store.start_equity_usd <= 0 and equity > 0:
@@ -163,12 +185,39 @@ def run_cycle(
         advice=advice,
     )
 
-    intents: list[TradeIntent] = decide(
-        state, signals, cfg, regime_override=effective_regime
-    )
-    qual = qualification_intent(state, cfg)
-    if qual is not None:
-        intents.append(qual)
+    halt_reason = None
+    if (
+        store.runtime_status != "HALTED"
+        and state.trailing_drawdown_pct >= cfg.kill_switch_drawdown_pct
+    ):
+        halt_reason = (
+            f"persistent halt: trailing drawdown "
+            f"{state.trailing_drawdown_pct:.1%} >= "
+            f"{cfg.kill_switch_drawdown_pct:.0%} guard"
+        )
+        store.latch_halt(now=now, reason=halt_reason)
+
+    if store.runtime_status == "HALTED":
+        intents = []
+    elif store.runtime_status == "RISK_REDUCING":
+        if state.position is None:
+            store.runtime_status = "HALTED"
+            intents = []
+        else:
+            intents = [
+                TradeIntent(
+                    kind=IntentKind.EXIT,
+                    from_symbol=state.position.symbol,
+                    to_symbol=cfg.floor_symbols[0],
+                    notional_usd=state.position.notional_usd,
+                    reason=store.halt_reason or "RISK_REDUCING: exit open sleeve",
+                )
+            ]
+    else:
+        intents = decide(state, signals, cfg, regime_override=effective_regime)
+        qual = qualification_intent(state, cfg)
+        if qual is not None:
+            intents.append(qual)
 
     executions: list[ExecutionResult] = []
     for intent in intents:
@@ -195,9 +244,13 @@ def run_cycle(
                 "market_cap_usd": {
                     k: round(v, 2) for k, v in signals.market_cap_usd.items()
                 },
+                "source_deviation_pct": {
+                    k: round(v, 3) for k, v in signals.source_deviation_pct.items()
+                },
                 "degraded": signals.degraded,
                 "regime_deterministic": deterministic_regime.value,
                 "active_risk_profile": active_profile,
+                "stable_haircut_pct": cfg.stable_haircut_pct,
             },
             inference_proof=inference_proof,
             regime=regime,
@@ -229,6 +282,7 @@ def run_cycle(
                     "ok": result.ok,
                     "tx_hash": result.tx_hash,
                     "outcome": result.outcome,
+                    "verification": result.verification,
                 }
             ],
             execution_seal={
@@ -238,6 +292,7 @@ def run_cycle(
                 "tx_hash": result.tx_hash,
                 "pre_trade_anchor_tx_hash": pre_trade_anchor_tx_hash,
                 "inference_proof_hash": inference_proof["proof_hash"],
+                "verification": result.verification,
                 "detail": result.detail[:500],
             },
             inference_proof=inference_proof,
@@ -246,6 +301,8 @@ def run_cycle(
         )
         if result.applies_state_change:
             _apply_position_effect(store, intent, signals)
+            if store.runtime_status == "RISK_REDUCING" and store.position is None:
+                store.runtime_status = "HALTED"
 
     receipt = receipts.append(
         ts=now.isoformat(),
@@ -268,7 +325,13 @@ def run_cycle(
             "market_cap_usd": {
                 k: round(v, 2) for k, v in signals.market_cap_usd.items()
             },
+            "source_deviation_pct": {
+                k: round(v, 3) for k, v in signals.source_deviation_pct.items()
+            },
             "active_risk_profile": active_profile,
+            "stable_haircut_pct": cfg.stable_haircut_pct,
+            "runtime_status": store.runtime_status,
+            "halt_reason": store.halt_reason,
             "degraded": signals.degraded,
             "regime_deterministic": deterministic_regime.value,
             "advisor": (
@@ -286,6 +349,8 @@ def run_cycle(
         regime=regime,
         thesis=(advice.thesis if advice is not None else None)
         or "; ".join(i.reason for i in intents)
+        or halt_reason
+        or store.halt_reason
         or f"hold ({regime})",
         intents=[
             {
@@ -302,6 +367,7 @@ def run_cycle(
                 "ok": e.ok,
                 "tx_hash": e.tx_hash,
                 "outcome": e.outcome,
+                "verification": e.verification,
             }
             for e in executions
         ],
@@ -321,6 +387,7 @@ def run_cycle(
         "inference_proof_hash": inference_proof["proof_hash"],
         "data_cost_usd": round(sum(p.cost_usdc for p in purchases), 4),
         "degraded": signals.degraded,
+        "runtime_status": store.runtime_status,
     }
     logger.info("cycle done: %s", summary)
     return summary

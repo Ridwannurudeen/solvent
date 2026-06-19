@@ -16,11 +16,12 @@ anchored daily under an ERC-8004 identity.
 **Short description:**
 
 SOLVENT reads live crypto market data through CoinMarketCap Agent Hub/x402,
-decides under a deterministic risk constitution, and executes on BSC through
-Trust Wallet Agent Kit. Its edge is auditability: every cycle emits a decision
-receipt that includes data bought, cost, inferred regime, thesis, intents, and
-execution tx hash. Receipts are hash-chained and the daily head is anchored
-on-chain under ERC-8004 agent `136384`.
+cross-checks prices against Binance public REST, decides under a deterministic
+risk constitution, and executes on BSC through Trust Wallet Agent Kit. Its edge
+is auditability: every cycle emits a decision receipt that includes data bought,
+cost, raw response commitment, inferred regime, thesis, intents, execution tx
+hash, and settlement verification. Receipts are hash-chained and the daily head
+is anchored on-chain under ERC-8004 agent `136384`.
 
 **Repository:** https://github.com/Ridwannurudeen/solvent
 
@@ -78,22 +79,28 @@ automation.
 SOLVENT uses a barbell portfolio designed for a live PnL tournament with a
 drawdown gate:
 
-- At least 75% of equity stays in in-scope BSC stables.
+- At least 75% of equity stays in in-scope BSC stables, conservatively marked
+  with a stable haircut instead of assuming every unit is exactly $1.
 - A single momentum sleeve can use about 22% of equity.
 - Entries require risk-on regime plus executable token momentum.
 - Stops, slippage, token allowlist, per-trade sizing, and daily trade limits are
   deterministic.
 - A ratchet shrinks risk after gains.
-- A kill switch liquidates the sleeve before the competition drawdown line.
+- A kill switch liquidates the sleeve before the competition drawdown line and
+  latches `HALTED` until explicit operator resume.
 - A deadman path can fire a small stable-to-stable rotation to satisfy the daily
-  trade requirement.
+  trade requirement when the runtime is not persistently halted.
+- CMC prices are checked against Binance; divergence or secondary-source failure
+  degrades the cycle and prevents new risk.
 - A researched `conviction_50` profile is available for the live competition:
   50% stable floor, 48% maximum sleeve, 8% hard stop, 10.0 momentum entry bar,
   and 48h minimum hold before momentum-decay exits. It is activated only by
   explicit runtime profile selection.
 - Money-moving intents produce a pre-trade commit receipt before execution and
-  an execution seal after the result. Production proof mode can publish the
-  pre-trade commit hash to ERC-8004 before the TWAK swap.
+  an execution seal after the result. Production proof mode publishes the
+  pre-trade commit hash to ERC-8004 before the TWAK swap. A swap is not marked
+  `CONFIRMED` until the receipt, wallet sender, ERC-20 transfer logs, and
+  post-trade balance deltas match the intent.
 - New receipts include inference commitment packets that hash-bind the signal
   input, effective regime output, and model/kernel ID into the receipt chain.
   They are commitments, not TEE or zk proofs that a model executed.
@@ -104,9 +111,9 @@ the deterministic kernel.
 ## Sponsor Alignment
 
 - **CMC Agent Hub:** live market reads and x402 paid data are recorded per
-  decision receipt.
+  decision receipt with response hashes and byte counts.
 - **Trust Wallet Agent Kit:** TWAK is the only live execution path, using local
-  self-custody signing.
+  self-custody signing and intent-aware settlement verification.
 - **BNB AI Agent SDK / ERC-8004 / ERC-8183:** agent identity `136384` anchors
   the receipt chain head daily, pre-trade anchors can seal commit hashes before
   swaps, and the latest regime signal can be sold as an ERC-8183 deliverable.
@@ -124,7 +131,7 @@ the deterministic kernel.
 7. `/signal` showing the ERC-8183-ready paid signal payload.
 8. `python verify_receipts.py` matching `/verify`.
 9. ERC-8004 anchor in `/state` and BscScan.
-10. Strategy/risk constitution in `kernel/rules.py` and frozen `/policy` manifest.
+10. Strategy/risk constitution in `kernel/rules.py` and signed, anchored `/policy` manifest.
 
 ## Do Not Claim
 
@@ -132,3 +139,5 @@ the deterministic kernel.
 - Do not claim every individual receipt is wallet-signed; the receipt log is hash-chained and covered by periodic wallet-signed on-chain checkpoints.
 - Do not call inference commitments TEE, zk, or runtime proofs.
 - Do not claim pre-June-22 live rehearsal PnL is scored-week leaderboard PnL.
+- Do not claim TEE/zk proof-of-inference; the proof layer is hash commitments,
+  wallet-signed checkpoints, and settlement verification.

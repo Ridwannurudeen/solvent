@@ -33,6 +33,7 @@ class ExecutionResult:
     tx_hash: str | None
     detail: str
     outcome: str = ""
+    verification: dict | None = None
 
     def __post_init__(self) -> None:
         if not self.outcome:
@@ -113,19 +114,26 @@ class Journal:
     def pending_entries(self) -> list[dict]:
         return [dict(e) for e in self._entries.values() if e["state"] == self.PENDING]
 
-    def mark_attempted(self, key: str, intent: TradeIntent) -> None:
-        self._write(
-            {
-                "key": key,
-                "state": self.PENDING,
-                "ts": datetime.now(timezone.utc).isoformat(),
-                "kind": intent.kind.value,
-                "from": intent.from_symbol,
-                "to": intent.to_symbol,
-                "notional_usd": intent.notional_usd,
-                "reason": intent.reason,
-            }
-        )
+    def mark_attempted(
+        self,
+        key: str,
+        intent: TradeIntent,
+        *,
+        pre_balances: dict[str, float] | None = None,
+    ) -> None:
+        entry = {
+            "key": key,
+            "state": self.PENDING,
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "kind": intent.kind.value,
+            "from": intent.from_symbol,
+            "to": intent.to_symbol,
+            "notional_usd": intent.notional_usd,
+            "reason": intent.reason,
+        }
+        if pre_balances is not None:
+            entry["pre_balances"] = pre_balances
+        self._write(entry)
 
     def mark_result(
         self,
@@ -134,16 +142,18 @@ class Journal:
         tx_hash: str | None,
         detail: str,
         ts: datetime | None = None,
+        verification: dict | None = None,
     ) -> None:
-        self._write(
-            {
-                "key": key,
-                "state": "CONFIRMED" if ok else "FAILED",
-                "ts": (ts or datetime.now(timezone.utc)).isoformat(),
-                "tx_hash": tx_hash,
-                "detail": detail[:500],
-            }
-        )
+        entry = {
+            "key": key,
+            "state": "CONFIRMED" if ok else "FAILED",
+            "ts": (ts or datetime.now(timezone.utc)).isoformat(),
+            "tx_hash": tx_hash,
+            "detail": detail[:500],
+        }
+        if verification is not None:
+            entry["verification"] = verification
+        self._write(entry)
 
     def resolve_attempt(
         self,
@@ -153,6 +163,7 @@ class Journal:
         tx_hash: str | None,
         detail: str,
         ts: datetime | None = None,
+        verification: dict | None = None,
     ) -> dict:
         state = self.state_of(key)
         if state is None:
@@ -161,7 +172,14 @@ class Journal:
             raise ValueError(f"{key} is {state}, not {self.PENDING}")
         if ok and not tx_hash:
             raise ValueError("confirmed attempts require a tx_hash")
-        self.mark_result(key, ok=ok, tx_hash=tx_hash, detail=detail, ts=ts)
+        self.mark_result(
+            key,
+            ok=ok,
+            tx_hash=tx_hash,
+            detail=detail,
+            ts=ts,
+            verification=verification,
+        )
         entry = self.latest_entry(key)
         assert entry is not None
         return entry
@@ -188,7 +206,9 @@ class TwakExecutor:
         chain: str = "bsc",
         slippage_pct: float = 1.0,
         timeout_s: int = 180,
-        receipt_verifier: Callable[[str], dict] | None = None,
+        receipt_verifier: Callable[[TradeIntent, str, dict[str, float] | None], dict]
+        | None = None,
+        balance_reader: Callable[[TradeIntent], dict[str, float]] | None = None,
     ) -> None:
         self.journal = journal
         self._password = password
@@ -197,6 +217,7 @@ class TwakExecutor:
         self.slippage_pct = slippage_pct
         self.timeout_s = timeout_s
         self.receipt_verifier = receipt_verifier
+        self.balance_reader = balance_reader
 
     def execute(self, intent: TradeIntent, cycle_id: str) -> ExecutionResult:
         key = intent_key(intent, cycle_id)
@@ -235,7 +256,15 @@ class TwakExecutor:
                 "unresolved",
             )
 
-        self.journal.mark_attempted(key, intent)
+        try:
+            pre_balances = self.balance_reader(intent) if self.balance_reader else None
+        except Exception as exc:
+            logger.error("pre-trade balance snapshot failed; refusing to broadcast")
+            return ExecutionResult(
+                key, False, None, str(exc)[:200], "failed", verification=None
+            )
+
+        self.journal.mark_attempted(key, intent, pre_balances=pre_balances)
         cmd = [
             self.twak_bin,
             "swap",
@@ -270,16 +299,19 @@ class TwakExecutor:
         if not ok:
             logger.error("twak attempt outcome UNKNOWN - halting further sends")
             return ExecutionResult(key, False, tx_hash, out[:200], "unresolved")
+        verification = None
         if self.receipt_verifier is not None:
             try:
-                self.receipt_verifier(tx_hash)
+                verification = self.receipt_verifier(intent, tx_hash, pre_balances)
             except Exception as exc:
                 logger.error("tx receipt verification failed; outcome UNKNOWN")
                 return ExecutionResult(
                     key, False, tx_hash, str(exc)[:200], "unresolved"
                 )
-        self.journal.mark_result(key, ok, tx_hash, out)
-        return ExecutionResult(key, ok, tx_hash, out[:200], "executed_now")
+        self.journal.mark_result(key, ok, tx_hash, out, verification=verification)
+        return ExecutionResult(
+            key, ok, tx_hash, out[:200], "executed_now", verification=verification
+        )
 
 
 class PaperExecutor:

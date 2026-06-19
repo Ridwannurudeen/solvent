@@ -123,6 +123,20 @@ def decide(
     # ── 1. Open-position management (stop / decay / ratchet) ────────
     pos = state.position
     if pos is not None:
+        if signals.degraded:
+            intents.append(
+                TradeIntent(
+                    kind=IntentKind.EXIT,
+                    from_symbol=pos.symbol,
+                    to_symbol=cfg.floor_symbols[0],
+                    notional_usd=pos.notional_usd,
+                    reason=(
+                        f"DEGRADED DATA UNWIND: exit {pos.symbol}; "
+                        "market-data verification failed"
+                    ),
+                )
+            )
+            return intents
         price = signals.prices.get(pos.symbol)
         if price is not None and pos.entry_price_usd > 0:
             pnl_pct = price / pos.entry_price_usd - 1.0

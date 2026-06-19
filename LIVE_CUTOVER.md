@@ -16,10 +16,11 @@ cd /opt/solvent
 sudo -u solvent -H .venv/bin/python -m solvent.ops.preflight --env-file /opt/solvent/solvent.env
 sudo -u solvent -H .venv/bin/python -m solvent.ops.readiness --env-file /opt/solvent/solvent.env --data-dir /opt/solvent/data-prod --profile live
 sudo -u solvent -H .venv/bin/python -m solvent.ops.exec_recovery --data-dir /opt/solvent/data-prod list-unresolved
+sudo -u solvent -H .venv/bin/python -m solvent.ops.state_control --data-dir /opt/solvent/data-prod status
 sudo -u solvent -H twak compete status
 sudo -u solvent -H twak wallet balance --chain bsc --json
 sudo -u solvent -H twak swap USDT USDC --usd 1 --chain bsc --quote-only --json
-sudo -u solvent -H .venv/bin/python -m solvent.policy.manifest --profile "${SOLVENT_RISK_PROFILE:-safety}" --out /opt/solvent/data-prod/policy-manifest.json
+sudo -u solvent -H .venv/bin/python -m solvent.policy.manifest --profile "${SOLVENT_RISK_PROFILE:-safety}" --sign-env --anchor --out /opt/solvent/data-prod/policy-manifest.json
 ```
 
 Required outcomes:
@@ -32,8 +33,10 @@ Required outcomes:
   `0xE4fe23FB57dbb9AC2f685ea29B6b9A1409A0d359`.
 - BNB gas and in-scope stable balances are non-zero.
 - Quote-only TWAK swap succeeds on `bsc`.
-- `/opt/solvent/data-prod/policy-manifest.json` exists and its `manifest_hash`
-  is the policy hash referenced during the scored week.
+- Runtime status is `ACTIVE`, or an explicit operator decision has resumed it
+  after review.
+- `/opt/solvent/data-prod/policy-manifest.json` exists and exposes
+  `manifest_hash`, `signature`, and `anchor`.
 
 ## 2. Live data directory
 
@@ -93,7 +96,9 @@ List halted attempts:
 sudo -u solvent -H .venv/bin/python -m solvent.ops.exec_recovery --data-dir /opt/solvent/data-prod list-unresolved
 ```
 
-If BscScan/wallet history shows the transaction mined:
+If BscScan/wallet history shows the transaction mined, `mark-confirmed` still
+verifies the receipt, wallet sender, token transfer logs, and balance deltas
+before resolving the attempt:
 
 ```bash
 sudo -u solvent -H .venv/bin/python -m solvent.ops.exec_recovery --data-dir /opt/solvent/data-prod \
@@ -110,7 +115,17 @@ sudo -u solvent -H .venv/bin/python -m solvent.ops.exec_recovery --data-dir /opt
 After either action, rerun preflight. If another `ATTEMPTED` row remains, repeat
 the review for that key before resuming trading.
 
-## 5. Rollback
+## 5. Persistent halt recovery
+
+If `/state` reports `runtime_status=HALTED`, inspect the reason and resume only
+after the journal is clear:
+
+```bash
+sudo -u solvent -H .venv/bin/python -m solvent.ops.state_control --data-dir /opt/solvent/data-prod status
+sudo -u solvent -H .venv/bin/python -m solvent.ops.state_control --data-dir /opt/solvent/data-prod resume --reason 'operator reviewed halt condition'
+```
+
+## 6. Rollback
 
 Stop trading first:
 

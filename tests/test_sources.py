@@ -12,6 +12,7 @@ from solvent.receipts.chain import DataPurchase
 from solvent.signals.sources import (
     CMC_QUOTE_IDS,
     CMCSource,
+    CrossCheckedSource,
     _extract_fear_greed,
     _extract_quote_metrics,
     _extract_quote_fields,
@@ -19,6 +20,7 @@ from solvent.signals.sources import (
     quote_ids_for,
     momentum_score,
 )
+from solvent.kernel.state import MarketSignals
 
 # ── pure helpers ──────────────────────────────────────────────────────
 
@@ -167,3 +169,60 @@ def test_neutral_fear_greed_skips_anomaly_tier():
     assert ("get_global_crypto_derivatives_metrics", {}) not in client.calls
     assert signals.btc_funding_rate is None
     assert len(purchases) == 2  # base tier only
+
+
+class StaticSource:
+    def __init__(self, signals):
+        self.signals = signals
+
+    def fetch(self):
+        return self.signals, [DataPurchase(tool="static", cost_usdc=0.0, ok=True)]
+
+
+def test_cross_checked_source_keeps_clean_matching_prices():
+    primary = StaticSource(
+        MarketSignals(
+            fear_greed=60,
+            btc_funding_rate=0.0001,
+            prices={"CAKE": 2.50},
+            degraded=False,
+        )
+    )
+    secondary = StaticSource(
+        MarketSignals(
+            fear_greed=None,
+            btc_funding_rate=None,
+            prices={"CAKE": 2.50},
+            degraded=False,
+        )
+    )
+
+    signals, purchases = CrossCheckedSource(primary, secondary).fetch()
+
+    assert signals.degraded is False
+    assert signals.source_deviation_pct["CAKE"] == 0.0
+    assert len(purchases) == 2
+
+
+def test_cross_checked_source_degrades_on_price_divergence():
+    primary = StaticSource(
+        MarketSignals(
+            fear_greed=60,
+            btc_funding_rate=0.0001,
+            prices={"CAKE": 2.50},
+            degraded=False,
+        )
+    )
+    secondary = StaticSource(
+        MarketSignals(
+            fear_greed=None,
+            btc_funding_rate=None,
+            prices={"CAKE": 2.00},
+            degraded=False,
+        )
+    )
+
+    signals, _ = CrossCheckedSource(primary, secondary, max_deviation_pct=5.0).fetch()
+
+    assert signals.degraded is True
+    assert signals.source_deviation_pct["CAKE"] == 25.0

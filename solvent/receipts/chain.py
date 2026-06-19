@@ -22,6 +22,8 @@ class DataPurchase:
     tool: str
     cost_usdc: float
     ok: bool
+    response_hash: str | None = None
+    response_bytes: int = 0
 
 
 @dataclass(frozen=True)

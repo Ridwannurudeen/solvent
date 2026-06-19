@@ -1,4 +1,7 @@
-from solvent.exec.livebook import LiveBook
+import pytest
+
+from solvent.exec.livebook import LiveBook, LiveReceiptVerifier, TRANSFER_TOPIC
+from solvent.kernel.allocator import IntentKind, TradeIntent
 from solvent.kernel.allowlist import ADDRESSES
 
 # A real checksum address (Web3.to_checksum_address validates it offline).
@@ -55,6 +58,18 @@ def test_snapshot_includes_position_with_nondefault_decimals():
     assert snap["DOGE"] == 1500.0
 
 
+def test_snapshot_all_includes_residual_pinned_tokens():
+    raw = {
+        ADDRESSES["USDT"]: 40 * 10**18,
+        ADDRESSES["CAKE"]: 3 * 10**18,
+    }
+    dec = {ADDRESSES["USDT"]: 18, ADDRESSES["CAKE"]: 18}
+    book, _ = make_book(raw, dec)
+    snap = book.snapshot_all()
+    assert snap["USDT"] == 40.0
+    assert snap["CAKE"] == 3.0
+
+
 def test_dust_balances_dropped():
     raw = {ADDRESSES["USDT"]: 5, ADDRESSES["USDC"]: 0}  # 5 wei of an 18-dec token
     dec = {ADDRESSES["USDT"]: 18, ADDRESSES["USDC"]: 18}
@@ -80,3 +95,101 @@ def test_unpinned_symbol_skipped():
     book, _ = make_book(raw, dec)
     snap = book.snapshot(position_symbol="TRX")
     assert snap == {"USDT": 50.0}
+
+
+def _topic_addr(address: str) -> str:
+    return "0x" + "0" * 24 + address[2:].lower()
+
+
+def _data(value: int) -> str:
+    return "0x" + f"{value:064x}"
+
+
+class FakeEth:
+    block_number = 10
+
+    def __init__(self, receipt, tx):
+        self.receipt = receipt
+        self.tx = tx
+
+    def wait_for_transaction_receipt(self, tx_hash, timeout):
+        return self.receipt
+
+    def get_transaction(self, tx_hash):
+        return self.tx
+
+
+class FakeW3:
+    def __init__(self, receipt, tx):
+        self.eth = FakeEth(receipt, tx)
+
+
+def _swap_intent():
+    return TradeIntent(
+        kind=IntentKind.QUALIFY,
+        from_symbol="USDT",
+        to_symbol="USDC",
+        notional_usd=2.0,
+        reason="test",
+    )
+
+
+def test_live_receipt_verifier_checks_logs_and_balance_deltas():
+    router = "0x1111111111111111111111111111111111111111"
+    tx_hash = "0x" + "ab" * 32
+    raw = {ADDRESSES["USDT"]: 100 * 10**18, ADDRESSES["USDC"]: 0}
+    dec = {ADDRESSES["USDT"]: 18, ADDRESSES["USDC"]: 18}
+    receipt = {
+        "status": 1,
+        "blockNumber": 9,
+        "logs": [
+            {
+                "address": ADDRESSES["USDT"],
+                "topics": [TRANSFER_TOPIC, _topic_addr(WALLET), _topic_addr(router)],
+                "data": _data(2 * 10**18),
+            },
+            {
+                "address": ADDRESSES["USDC"],
+                "topics": [TRANSFER_TOPIC, _topic_addr(router), _topic_addr(WALLET)],
+                "data": _data(int(1.99 * 10**18)),
+            },
+        ],
+    }
+    book, _ = make_book(raw, dec)
+    book.w3 = FakeW3(receipt, {"from": WALLET})
+    verifier = LiveReceiptVerifier(book, slippage_pct=1.0)
+    before = verifier.before(_swap_intent())
+    raw[ADDRESSES["USDT"]] = 98 * 10**18
+    raw[ADDRESSES["USDC"]] = int(1.99 * 10**18)
+
+    proof = verifier(_swap_intent(), tx_hash, before)
+
+    assert proof["from_transfer_out"] == 2.0
+    assert proof["to_transfer_in"] == pytest.approx(1.99)
+    assert proof["from_balance_delta"] == -2.0
+    assert proof["to_balance_delta"] == pytest.approx(1.99)
+
+
+def test_live_receipt_verifier_rejects_missing_incoming_transfer():
+    router = "0x1111111111111111111111111111111111111111"
+    raw = {ADDRESSES["USDT"]: 100 * 10**18, ADDRESSES["USDC"]: 0}
+    dec = {ADDRESSES["USDT"]: 18, ADDRESSES["USDC"]: 18}
+    receipt = {
+        "status": 1,
+        "blockNumber": 9,
+        "logs": [
+            {
+                "address": ADDRESSES["USDT"],
+                "topics": [TRANSFER_TOPIC, _topic_addr(WALLET), _topic_addr(router)],
+                "data": _data(2 * 10**18),
+            }
+        ],
+    }
+    book, _ = make_book(raw, dec)
+    book.w3 = FakeW3(receipt, {"from": WALLET})
+    verifier = LiveReceiptVerifier(book, slippage_pct=1.0)
+    before = verifier.before(_swap_intent())
+    raw[ADDRESSES["USDT"]] = 98 * 10**18
+
+    with pytest.raises(RuntimeError, match="balance did not increase"):
+        verifier(_swap_intent(), "0x" + "ab" * 32, before)

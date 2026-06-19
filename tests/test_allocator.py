@@ -232,9 +232,11 @@ def test_min_hold_hours_suppresses_momentum_decay():
     assert decide(pos_state(), sig, cfg) == []
 
 
-def test_degraded_data_never_decay_exits():
+def test_degraded_data_unwinds_open_position():
     sig = risk_on_signals(momentum={"CAKE": 0.0}, degraded=True, prices={})
-    assert decide(pos_state(), sig, CFG) == []  # fail frozen, holds
+    intents = decide(pos_state(), sig, CFG)
+    assert [i.kind for i in intents] == [IntentKind.EXIT]
+    assert "DEGRADED DATA UNWIND" in intents[0].reason
 
 
 def test_holding_blocks_new_entries():

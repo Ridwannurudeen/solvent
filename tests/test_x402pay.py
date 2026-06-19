@@ -120,6 +120,8 @@ def test_spend_ledger_persists_daily_authorizations(tmp_path):
     assert result is not None
     assert purchase.ok is True
     assert purchase.cost_usdc == pytest.approx(0.01)
+    assert purchase.response_hash and purchase.response_hash.startswith("0x")
+    assert purchase.response_bytes > 0
     entry = json.loads((tmp_path / "x402-spend.jsonl").read_text().splitlines()[0])
     assert ledger.spent_on(entry["ts"][:10]) == pytest.approx(0.01)
 

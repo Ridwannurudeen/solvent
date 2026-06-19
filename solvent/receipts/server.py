@@ -125,6 +125,11 @@ def _holdings(
     paper_path = data_dir / "paper-holdings.json"
     if paper_path.exists():
         return _read_json(paper_path, {}), "paper", None
+    live_cache = data_dir / "live-holdings.json"
+    if live_cache.exists():
+        payload = _read_json(live_cache, {})
+        if isinstance(payload, dict) and isinstance(payload.get("holdings"), dict):
+            return payload["holdings"], "live-cache", None
     if os.environ.get("SOLVENT_MODE") != "live":
         return {}, "none", None
     try:
@@ -159,6 +164,9 @@ def state(
         "start_equity_usd": st.get("start_equity_usd"),
         "peak_equity_usd": st.get("peak_equity_usd"),
         "position": position,
+        "runtime_status": st.get("runtime_status", "ACTIVE"),
+        "halted_at": st.get("halted_at"),
+        "halt_reason": st.get("halt_reason"),
         "holdings": holdings,
         "holdings_source": holdings_source,
         "holdings_error": holdings_error,

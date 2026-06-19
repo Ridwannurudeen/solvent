@@ -163,6 +163,35 @@ def _public_checks(
             else f"manifest_hash={policy_payload.get('manifest_hash')}",
         )
     )
+    checks.append(
+        _check(
+            "public_policy_signature",
+            ok
+            and bool(
+                policy_payload
+                and isinstance(policy_payload.get("signature"), dict)
+                and policy_payload["signature"].get("signature")
+                and policy_payload["signature"].get("signer")
+            ),
+            detail
+            if not policy_payload
+            else f"signed={bool(policy_payload.get('signature'))}",
+        )
+    )
+    checks.append(
+        _check(
+            "public_policy_anchor",
+            ok
+            and bool(
+                policy_payload
+                and isinstance(policy_payload.get("anchor"), dict)
+                and policy_payload["anchor"].get("tx_hash")
+            ),
+            detail
+            if not policy_payload
+            else f"anchored={bool(policy_payload.get('anchor'))}",
+        )
+    )
 
     ok, proofs_payload, detail = _fetch_json(fetcher, f"{base}/inference-commitments")
     public["inference_commitments"] = proofs_payload

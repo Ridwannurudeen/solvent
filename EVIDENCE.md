@@ -29,7 +29,12 @@
 - TWAK live rehearsal swap tx: `0x2254bf01ea6bfa8d610c9bed916dbf19ec6db81d6068f1e0b0802a58cad50ac4`
 - CMC x402 isolated receipt head: `0x282364a912a5090e83b4b522e5470ddba02203b3b3c77755e96bc515f89ba744`
 - CMC x402 isolated receipt contents: 3 paid CMC MCP calls, `$0.03` total data cost, `degraded=false`, 22 parsed token prices, 22 momentum scores, no trade because regime was `risk-off`.
-- Production live-mode rehearsal now reads wallet holdings directly from BSC mainnet through `LiveBook` and writes to `/opt/solvent/data-prod`.
+- Production live-mode rehearsal now reads all pinned wallet token balances directly from BSC mainnet through `LiveBook` and writes to `/opt/solvent/data-prod`.
+- New live confirmations require a successful receipt, wallet sender match,
+  ERC-20 transfer logs in the expected direction, and post-trade balance deltas
+  before local position state can change.
+- CMC x402 response bodies are hash-committed in `data_purchases`, and live
+  CMC prices are cross-checked against Binance public REST.
 - New receipts include hash-bound inference commitment packets. The public `/signal` payload binds the latest regime signal to the receipt hash, chain head, latest anchor, and inference commitment hash.
 
 ## Current Boundary
@@ -42,7 +47,7 @@
 
 ## Submission-gated Items
 
-- Publish the frozen policy manifest for the scored week.
+- Keep the signed and ERC-8004-anchored policy manifest live for the scored week.
 - Record and upload the demo video.
 - Submit the DoraHacks BUIDL.
 - Increase or rebalance the scored-week stake only by explicit operator decision.

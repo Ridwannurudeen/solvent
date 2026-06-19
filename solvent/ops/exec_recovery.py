@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..exec.executor import Journal
+from ..exec.livebook import LiveBook, LiveReceiptVerifier
 from ..exec.livebook import make_web3
+from ..kernel.allocator import IntentKind, TradeIntent
 
 TX_HASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
@@ -43,27 +45,36 @@ def _parse_mined_at(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _verify_chain_receipt(tx_hash: str, *, wallet_address: str, network: str) -> dict:
-    from web3 import Web3
+def _intent_from_entry(entry: dict) -> TradeIntent:
+    return TradeIntent(
+        kind=IntentKind(entry["kind"]),
+        from_symbol=entry["from"],
+        to_symbol=entry["to"],
+        notional_usd=float(entry["notional_usd"]),
+        reason=entry.get("reason", "manual recovery"),
+    )
 
+
+def _verify_chain_receipt(
+    tx_hash: str,
+    *,
+    wallet_address: str,
+    network: str,
+    entry: dict,
+    slippage_pct: float,
+) -> dict:
     w3 = make_web3(network)
-    receipt = w3.eth.get_transaction_receipt(tx_hash)
-    if receipt is None:
-        raise SystemExit(f"transaction not found on {network}: {tx_hash}")
-    if receipt.get("status") != 1:
-        raise SystemExit(f"transaction did not succeed on {network}: {tx_hash}")
-    tx = w3.eth.get_transaction(tx_hash)
-    sender = tx.get("from")
-    if Web3.to_checksum_address(sender) != Web3.to_checksum_address(wallet_address):
-        raise SystemExit(
-            f"transaction sender {sender} does not match wallet {wallet_address}"
+    book = LiveBook(w3, wallet_address)
+    verifier = LiveReceiptVerifier(book, slippage_pct=slippage_pct, timeout_s=1)
+    try:
+        proof = verifier(
+            _intent_from_entry(entry),
+            tx_hash,
+            entry.get("pre_balances"),
         )
-    return {
-        "network": network,
-        "block_number": receipt.get("blockNumber"),
-        "status": receipt.get("status"),
-        "from": sender,
-    }
+    except Exception as exc:
+        raise SystemExit(str(exc)) from exc
+    return {"network": network, **proof}
 
 
 def _journal(data_dir: Path) -> Journal:
@@ -85,8 +96,13 @@ def mark_confirmed(
     wallet_address: str | None,
     network: str,
     skip_chain_check: bool,
+    slippage_pct: float,
 ) -> int:
     valid_tx_hash = _validate_tx_hash(tx_hash, required=True)
+    journal = _journal(data_dir)
+    entry = journal.latest_entry(key)
+    if entry is None:
+        raise KeyError(key)
     chain_check = None
     if not skip_chain_check:
         if not wallet_address:
@@ -95,9 +111,12 @@ def mark_confirmed(
                 "unless --skip-chain-check is set"
             )
         chain_check = _verify_chain_receipt(
-            valid_tx_hash, wallet_address=wallet_address, network=network
+            valid_tx_hash,
+            wallet_address=wallet_address,
+            network=network,
+            entry=entry,
+            slippage_pct=slippage_pct,
         )
-    journal = _journal(data_dir)
     entry = journal.resolve_attempt(
         key,
         ok=True,
@@ -109,6 +128,7 @@ def mark_confirmed(
             else "operator confirmed transaction on-chain without RPC check"
         ),
         ts=mined_at,
+        verification=chain_check,
     )
     _print({"resolved": entry, "chain_check": chain_check})
     return 0
@@ -153,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     confirmed.add_argument(
         "--network", default=os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
     )
+    confirmed.add_argument("--slippage-pct", type=float, default=1.0)
     confirmed.add_argument(
         "--wallet-address", default=os.environ.get("SOLVENT_WALLET_ADDRESS")
     )
@@ -181,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
                 wallet_address=args.wallet_address,
                 network=args.network,
                 skip_chain_check=args.skip_chain_check,
+                slippage_pct=args.slippage_pct,
             )
         return mark_failed(
             args.data_dir,

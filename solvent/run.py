@@ -181,8 +181,8 @@ def build_live(data_dir: Path, cfg: RiskConfig):
     from bnbagent.x402 import X402Signer
 
     from .exec.executor import TwakExecutor
-    from .exec.livebook import LiveBook, make_web3
-    from .signals.sources import CMCSource
+    from .exec.livebook import LiveBook, LiveReceiptVerifier, make_web3
+    from .signals.sources import CMCSource, CrossCheckedSource
     from .signals.x402pay import TOKEN_DECIMALS, SpendLedger, X402MCPClient, X402Payer
 
     def _require(name: str) -> str:
@@ -226,7 +226,7 @@ def build_live(data_dir: Path, cfg: RiskConfig):
             for (_n, asset), dec in TOKEN_DECIMALS.items()
         },
     )
-    source = CMCSource(
+    cmc_source = CMCSource(
         X402MCPClient(
             payer=X402Payer(signer),
             spend_ledger=SpendLedger(
@@ -234,24 +234,19 @@ def build_live(data_dir: Path, cfg: RiskConfig):
             ),
         )
     )
+    source = CrossCheckedSource(
+        cmc_source,
+        BinanceSource(),
+        max_deviation_pct=float(os.environ.get("SOLVENT_PRICE_DEVIATION_MAX_PCT", "5")),
+    )
 
     book = LiveBook(make_web3(network), wallet_address)
-
-    def verify_receipt(tx_hash: str) -> dict:
-        timeout = int(os.environ.get("SOLVENT_TX_RECEIPT_TIMEOUT_S", "180"))
-        receipt = book.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
-        if receipt.get("status") != 1:
-            raise RuntimeError(f"transaction reverted: {tx_hash}")
-        tx = book.w3.eth.get_transaction(tx_hash)
-        if tx.get("from", "").lower() != book.account.lower():
-            raise RuntimeError(
-                f"transaction sender {tx.get('from')} does not match {book.account}"
-            )
-        return {
-            "tx_hash": tx_hash,
-            "block_number": receipt.get("blockNumber"),
-            "status": receipt.get("status"),
-        }
+    receipt_verifier = LiveReceiptVerifier(
+        book,
+        slippage_pct=cfg.max_slippage_pct,
+        timeout_s=int(os.environ.get("SOLVENT_TX_RECEIPT_TIMEOUT_S", "180")),
+        confirmations=int(os.environ.get("SOLVENT_TX_CONFIRMATIONS", "1")),
+    )
 
     journal = Journal(data_dir / "journal.jsonl")
     executor = TwakExecutor(
@@ -259,7 +254,8 @@ def build_live(data_dir: Path, cfg: RiskConfig):
         password=twak_password,
         chain=twak_chain,
         slippage_pct=cfg.max_slippage_pct,
-        receipt_verifier=verify_receipt,
+        receipt_verifier=receipt_verifier,
+        balance_reader=receipt_verifier.before,
     )
 
     return source, executor, journal, book
@@ -307,9 +303,8 @@ def main() -> int:
         source, executor, journal, book = build_live(data_dir, cfg)
 
         def holdings_now() -> dict[str, float]:
-            # Re-read on-chain balances each cycle; floor stables + open sleeve.
-            pos = store.position["symbol"] if store.position else None
-            return book.snapshot(pos)
+            # Re-read every pinned token each cycle, including residual balances.
+            return book.snapshot_all()
     else:
         source, executor, journal, book = build_paper(data_dir)
 
@@ -319,13 +314,24 @@ def main() -> int:
     def one_cycle() -> bool:
         try:
             with SingleWriterLock(data_dir / "writer.lock"):
+                holdings = holdings_now()
+                if args.mode == "live":
+                    (data_dir / "live-holdings.json").write_text(
+                        json.dumps(
+                            {
+                                "ts": datetime.now(timezone.utc).isoformat(),
+                                "holdings": holdings,
+                            },
+                            separators=(",", ":"),
+                        )
+                    )
                 summary = run_cycle(
                     source=source,
                     executor=executor,
                     journal=journal,
                     receipts=receipts,
                     store=store,
-                    holdings=holdings_now(),
+                    holdings=holdings,
                     cfg=cfg,
                     cfg_selector=adaptive_selector,
                     advisor=advisor,

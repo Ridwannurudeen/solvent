@@ -150,6 +150,8 @@ def test_state_reports_holdings_and_liveness(tmp_path):
                 "start_equity_usd": 300.0,
                 "peak_equity_usd": 312.0,
                 "position": {"symbol": "CAKE", "notional_usd": 60.0},
+                "runtime_status": "HALTED",
+                "halt_reason": "operator review required",
             }
         )
     )
@@ -161,6 +163,8 @@ def test_state_reports_holdings_and_liveness(tmp_path):
     assert s["start_equity_usd"] == 300.0
     assert s["peak_equity_usd"] == 312.0
     assert s["position"]["symbol"] == "CAKE"
+    assert s["runtime_status"] == "HALTED"
+    assert s["halt_reason"] == "operator review required"
     assert s["holdings"]["USDT"] == 240.0
     assert s["holdings_source"] == "paper"
     assert s["holdings_error"] is None
@@ -176,6 +180,22 @@ def test_state_reads_live_holdings_when_live_and_no_paper_file(tmp_path, monkeyp
 
     assert s["holdings"] == {"USDT": 40.0, "CAKE": 2.0}
     assert s["holdings_source"] == "live"
+    assert s["holdings_error"] is None
+
+
+def test_state_prefers_live_holdings_cache(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_MODE", "live")
+    (tmp_path / "live-holdings.json").write_text(
+        json.dumps({"ts": "2026-06-24T12:00:00+00:00", "holdings": {"USDT": 40.0}})
+    )
+
+    def fail(_position):
+        raise AssertionError("live reader should not run when cache exists")
+
+    s = state(tmp_path, live_reader=fail)
+
+    assert s["holdings"] == {"USDT": 40.0}
+    assert s["holdings_source"] == "live-cache"
     assert s["holdings_error"] is None
 
 

@@ -18,6 +18,7 @@ offers on BSC so the agent's entire economic life stays on one chain.
 """
 
 import base64
+import hashlib
 import json
 import secrets
 import time
@@ -52,6 +53,17 @@ EIP3009_TYPE_FIELDS = [
     {"name": "validBefore", "type": "uint256"},
     {"name": "nonce", "type": "bytes32"},
 ]
+
+
+def _canonical_response(payload: dict) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _response_commitment(payload: dict) -> tuple[str, int]:
+    canonical = _canonical_response(payload)
+    return "0x" + hashlib.sha256(canonical.encode()).hexdigest(), len(
+        canonical.encode()
+    )
 
 
 @dataclass(frozen=True)
@@ -274,10 +286,20 @@ class X402MCPClient:
             resp = self._post(body, headers={"PAYMENT-SIGNATURE": header})
             cost = offer.cost_usd
         ok = resp.status_code == 200
-        result = resp.json().get("result") if ok else None
+        response_payload = resp.json() if ok else {}
+        response_hash, response_bytes = (
+            _response_commitment(response_payload) if response_payload else (None, 0)
+        )
+        result = response_payload.get("result") if ok else None
         if isinstance(result, dict) and result.get("isError"):
             ok = False
-        purchase = DataPurchase(tool=name, cost_usdc=cost if ok else 0.0, ok=ok)
+        purchase = DataPurchase(
+            tool=name,
+            cost_usdc=cost if ok else 0.0,
+            ok=ok,
+            response_hash=response_hash,
+            response_bytes=response_bytes,
+        )
         if not ok:
             return None, purchase
         return result, purchase

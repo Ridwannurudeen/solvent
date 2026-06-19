@@ -69,7 +69,16 @@ def _fetcher(head_hash):
                 }
             )
         if url.endswith("/policy"):
-            return 200, json.dumps({"manifest_hash": "0x" + "33" * 32})
+            return 200, json.dumps(
+                {
+                    "manifest_hash": "0x" + "33" * 32,
+                    "signature": {
+                        "signer": "0x" + "12" * 20,
+                        "signature": "0x" + "44" * 65,
+                    },
+                    "anchor": {"tx_hash": "0x" + "55" * 32},
+                }
+            )
         if url.endswith("/inference-commitments"):
             return 200, json.dumps([])
         if url.endswith("/proof"):

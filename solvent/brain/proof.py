@@ -30,6 +30,7 @@ def compact_signals(signals: MarketSignals) -> dict[str, Any]:
         "momentum": _round_map(signals.momentum, 6),
         "percent_change_1h": _round_map(signals.percent_change_1h, 6),
         "volume_change_24h": _round_map(signals.volume_change_24h, 6),
+        "source_deviation_pct": _round_map(signals.source_deviation_pct, 6),
         "degraded": signals.degraded,
     }
 

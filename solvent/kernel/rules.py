@@ -64,6 +64,9 @@ class RiskConfig:
     kill_switch_drawdown_pct: float = 0.22
     # Never let total portfolio value approach the $1 dust rule.
     min_portfolio_usd: float = 25.0
+    # Conservative floor valuation: stables are marked at min(price, $1)
+    # minus this haircut instead of exactly $1.
+    stable_haircut_pct: float = 0.0025
 
     # ── Per-trade limits ─────────────────────────────────────────────
     # Max notional of any single swap as a fraction of equity.

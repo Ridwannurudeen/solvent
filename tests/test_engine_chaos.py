@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from solvent.engine import StateStore, run_cycle
+from solvent.engine import StateStore, compute_equity, run_cycle
 from solvent.exec.executor import ExecutionResult, Journal, PaperExecutor, intent_key
 from solvent.kernel import allowlist
 from solvent.kernel.rules import RiskConfig
@@ -105,6 +105,24 @@ def _position(symbol="CAKE", entry=2.5, notional=60.0, **over):
     return position
 
 
+def test_compute_equity_marks_stables_conservatively():
+    signals = MarketSignals(
+        fear_greed=60,
+        btc_funding_rate=0.0001,
+        prices={"USDT": 0.98, "USDC": 1.02, "CAKE": 2.5},
+    )
+
+    equity, floor = compute_equity(
+        {"USDT": 10.0, "USDC": 10.0, "CAKE": 2.0},
+        signals,
+        ("USDT", "USDC"),
+        stable_haircut_pct=0.01,
+    )
+
+    assert floor == pytest.approx(10.0 * 0.98 * 0.99 + 10.0 * 1.0 * 0.99)
+    assert equity == pytest.approx(floor + 5.0)
+
+
 def test_degraded_data_freezes_trading(tmp_path):
     signals = MarketSignals(
         fear_greed=None, btc_funding_rate=None, momentum={}, prices={}, degraded=True
@@ -115,6 +133,24 @@ def test_degraded_data_freezes_trading(tmp_path):
     assert summary["degraded"] is True
     assert receipt["regime"] == "risk-off"
     assert receipt["signals"]["degraded"] is True
+
+
+def test_degraded_data_unwinds_open_position(tmp_path):
+    signals = MarketSignals(
+        fear_greed=None,
+        btc_funding_rate=None,
+        momentum={},
+        prices={},
+        degraded=True,
+    )
+    store = StateStore(path=tmp_path / "state.json", position=_position())
+    summary, receipt = _run(
+        tmp_path, signals, {"USDT": 240.0, "CAKE": 24.0}, store, NOON
+    )
+    assert summary["intents"] == 1
+    assert receipt["intents"][0]["kind"] == "exit"
+    assert "DEGRADED DATA UNWIND" in receipt["thesis"]
+    assert store.position is None
 
 
 def test_kill_switch_liquidates_and_clears_position(tmp_path):
@@ -138,8 +174,33 @@ def test_kill_switch_liquidates_and_clears_position(tmp_path):
     assert summary["intents"] == 1
     assert summary["executed_ok"] == 1
     assert receipt["intents"][0]["kind"] == "exit"
-    assert "KILL SWITCH" in receipt["thesis"]
+    assert "persistent halt" in receipt["thesis"]
     assert store.position is None  # liquidated + persisted
+    assert store.runtime_status == "HALTED"
+    assert store.halt_reason and "trailing drawdown" in store.halt_reason
+
+
+def test_persistent_halt_blocks_later_entries(tmp_path):
+    signals = MarketSignals(
+        fear_greed=80,
+        btc_funding_rate=0.0001,
+        momentum={"CAKE": 5.0},
+        prices={"CAKE": 2.5},
+        degraded=False,
+    )
+    store = StateStore(
+        path=tmp_path / "state.json",
+        start_equity_usd=300.0,
+        peak_equity_usd=400.0,
+        runtime_status="HALTED",
+        halt_reason="operator review required",
+    )
+
+    summary, receipt = _run(tmp_path, signals, {"USDT": 300.0}, store, NOON)
+
+    assert summary["intents"] == 0
+    assert receipt["signals"]["runtime_status"] == "HALTED"
+    assert "operator review required" in receipt["thesis"]
 
 
 def test_stop_loss_exits_losing_position(tmp_path):

@@ -110,6 +110,7 @@ def run_deadman(
                     "ok": result.ok,
                     "tx_hash": result.tx_hash,
                     "outcome": result.outcome,
+                    "verification": result.verification,
                 }
             ],
             execution_seal={
@@ -118,6 +119,7 @@ def run_deadman(
                 "applies_state_change": result.applies_state_change,
                 "tx_hash": result.tx_hash,
                 "pre_trade_anchor_tx_hash": pre_trade_anchor_tx_hash,
+                "verification": result.verification,
                 "detail": result.detail[:500],
             },
         )
@@ -136,34 +138,23 @@ def make_executor(mode: str, journal: Journal, cfg: RiskConfig):
     receipt_verifier = None
     wallet_address = os.environ.get("SOLVENT_WALLET_ADDRESS")
     if wallet_address:
-        from ..exec.livebook import LiveBook, make_web3
+        from ..exec.livebook import LiveBook, LiveReceiptVerifier, make_web3
 
         network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
         book = LiveBook(make_web3(network), wallet_address)
-
-        def verify_receipt(tx_hash: str) -> dict:
-            timeout = int(os.environ.get("SOLVENT_TX_RECEIPT_TIMEOUT_S", "180"))
-            receipt = book.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
-            if receipt.get("status") != 1:
-                raise RuntimeError(f"transaction reverted: {tx_hash}")
-            tx = book.w3.eth.get_transaction(tx_hash)
-            if tx.get("from", "").lower() != book.account.lower():
-                raise RuntimeError(
-                    f"transaction sender {tx.get('from')} does not match {book.account}"
-                )
-            return {
-                "tx_hash": tx_hash,
-                "block_number": receipt.get("blockNumber"),
-                "status": receipt.get("status"),
-            }
-
-        receipt_verifier = verify_receipt
+        receipt_verifier = LiveReceiptVerifier(
+            book,
+            slippage_pct=cfg.max_slippage_pct,
+            timeout_s=int(os.environ.get("SOLVENT_TX_RECEIPT_TIMEOUT_S", "180")),
+            confirmations=int(os.environ.get("SOLVENT_TX_CONFIRMATIONS", "1")),
+        )
     return TwakExecutor(
         journal,
         password=os.environ.get("TWAK_WALLET_PASSWORD"),
         chain=os.environ.get("SOLVENT_TWAK_CHAIN", "bsc"),
         slippage_pct=cfg.max_slippage_pct,
         receipt_verifier=receipt_verifier,
+        balance_reader=receipt_verifier.before if receipt_verifier else None,
     )
 
 

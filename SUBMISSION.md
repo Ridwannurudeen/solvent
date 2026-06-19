@@ -38,20 +38,21 @@ SOLVENT is a glass-box BSC trading agent: it reads CMC market data, decides unde
 
 SOLVENT uses a barbell structure built for the live PnL week:
 
-- 75%+ floor reserve in in-scope BSC stables.
+- 75%+ floor reserve in in-scope BSC stables, marked conservatively with a stable haircut.
 - One momentum sleeve capped around 22% of equity.
 - Deterministic entry, exit, stop, slippage, token allowlist, and drawdown rules.
 - Lock-in ratchet that shrinks the sleeve after gains.
-- Kill switch before the competition drawdown disqualification threshold.
-- Deadman qualification path to satisfy the daily trade requirement.
+- Kill switch before the competition drawdown disqualification threshold, latched until explicit operator resume.
+- Deadman qualification path to satisfy the daily trade requirement when the runtime is not persistently halted.
+- CMC x402 prices are cross-checked against Binance public REST; divergence marks the cycle degraded.
 
 The advisor layer is optional and can only de-risk; it cannot force or enlarge a trade.
 
 ## Sponsor Stack
 
-- CoinMarketCap: live mode uses CMC Agent Hub/x402 MCP calls for global metrics, quotes, and conditional derivatives data.
-- Trust Wallet Agent Kit: TWAK wallet/keychain is used for local self-custody signing, and `TwakExecutor` is the sole live execution path.
-- BNB AI Agent SDK: ERC-8004 identity and daily receipt-chain anchors provide persistent on-chain proof.
+- CoinMarketCap: live mode uses CMC Agent Hub/x402 MCP calls for global metrics, quotes, and conditional derivatives data; paid responses are hash-committed in receipts.
+- Trust Wallet Agent Kit: TWAK wallet/keychain is used for local self-custody signing, and `TwakExecutor` is the sole live execution path with receipt, sender, transfer-log, and balance-delta verification.
+- BNB AI Agent SDK: ERC-8004 identity, daily receipt-chain anchors, pre-trade anchors, and the signed/anchored policy manifest provide persistent on-chain proof.
 - BNB Agent SDK ERC-8183: the latest regime read can be sold as a paid signal deliverable whose manifest hash is submitted on-chain.
 - BNB Chain: all registration, anchors, and planned live trades are on BSC mainnet.
 
@@ -70,7 +71,7 @@ The verifier recomputes the public receipt hash chain and prints the head hash. 
 
 - Keep the wallet funded with the final scored-week stake and gas.
 - Keep live mode isolated at `/opt/solvent/data-prod` so paper and live accounting never mix.
-- Publish the frozen policy manifest at `/policy`.
+- Keep the signed and ERC-8004-anchored policy manifest live at `/policy`.
 - Record and attach the demo video.
 
 ## Compliance Notes

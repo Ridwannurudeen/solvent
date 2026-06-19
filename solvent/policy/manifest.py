@@ -19,6 +19,7 @@ from ..kernel.rules import RiskConfig, risk_config_for_profile
 
 SCHEMA = "solvent.policy-manifest.v1"
 SIGNING_PREFIX = "SOLVENT policy manifest"
+POLICY_ANCHOR_KEY = "solvent:policy-manifest"
 
 
 def _git_commit() -> str | None:
@@ -94,6 +95,10 @@ def build_policy_manifest(
         },
         "data": {
             "primary_provider": "CoinMarketCap Agent Hub via x402",
+            "secondary_provider": "Binance public REST price cross-check",
+            "max_price_deviation_pct": float(
+                env.get("SOLVENT_PRICE_DEVIATION_MAX_PCT", "5")
+            ),
             "max_source_age_s": 3600,
             "x402_session_budget_usd": cfg.x402_session_budget_usdc / 1e6,
             "x402_max_per_call_usd": cfg.x402_max_per_call_usdc / 1e6,
@@ -103,6 +108,12 @@ def build_policy_manifest(
             "twak_chain": env.get("SOLVENT_TWAK_CHAIN", "bsc"),
             "executor": "Trust Wallet Agent Kit",
             "one_transaction_per_intent": True,
+            "settlement_verification": [
+                "successful transaction receipt",
+                "wallet sender match",
+                "ERC-20 Transfer logs in expected direction",
+                "post-trade balance deltas in expected direction",
+            ],
             "result_outcomes": [
                 "executed_now",
                 "already_confirmed",
@@ -119,6 +130,8 @@ def build_policy_manifest(
         "emergency": {
             "kill_switch_drawdown_pct": cfg.kill_switch_drawdown_pct,
             "dq_drawdown_pct": cfg.dq_drawdown_pct,
+            "persistent_runtime_halt": True,
+            "resume_requires_clear_journal": True,
             "unresolved_execution_policy": "halt value-moving sends until resolved",
         },
     }
@@ -136,6 +149,15 @@ def sign_policy_manifest(manifest_hash: str, private_key: str) -> dict[str, str]
     }
 
 
+def anchor_policy_manifest(registry, agent_id: int, manifest_hash: str) -> dict:
+    result = registry.set_metadata(agent_id, POLICY_ANCHOR_KEY, manifest_hash)
+    return {
+        "key": POLICY_ANCHOR_KEY,
+        "value": manifest_hash,
+        "tx_hash": result.get("transactionHash"),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -147,6 +169,11 @@ def main(argv: list[str] | None = None) -> int:
         "--sign-env",
         action="store_true",
         help="sign with SOLVENT_PRIVATE_KEY from the environment",
+    )
+    parser.add_argument(
+        "--anchor",
+        action="store_true",
+        help="anchor the manifest hash under SOLVENT_AGENT_ID via ERC-8004 metadata",
     )
     args = parser.parse_args(argv)
 
@@ -160,6 +187,16 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("SOLVENT_PRIVATE_KEY is required for --sign-env")
         payload["signature"] = sign_policy_manifest(
             payload["manifest_hash"], private_key
+        )
+    if args.anchor:
+        from ..receipts.anchor import _build_registry
+
+        agent_id = os.environ.get("SOLVENT_AGENT_ID")
+        if not agent_id:
+            raise SystemExit("SOLVENT_AGENT_ID is required for --anchor")
+        network = os.environ.get("SOLVENT_BSC_NETWORK", "bsc-mainnet")
+        payload["anchor"] = anchor_policy_manifest(
+            _build_registry(network), int(agent_id), payload["manifest_hash"]
         )
     body = json.dumps(payload, indent=2, sort_keys=True)
     if args.out:

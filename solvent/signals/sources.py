@@ -18,7 +18,7 @@ positive ("momentum on confirmation").
 
 import logging
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import httpx
 
@@ -364,3 +364,52 @@ class BinanceSource:
             return (last_close / old_close - 1.0) * 100.0
         except (httpx.HTTPError, ValueError, IndexError):
             return None
+
+
+class CrossCheckedSource:
+    """Marks primary signals degraded when an independent price source disagrees."""
+
+    def __init__(
+        self,
+        primary,
+        secondary,
+        *,
+        max_deviation_pct: float = 5.0,
+        require_secondary: bool = True,
+    ) -> None:
+        self.primary = primary
+        self.secondary = secondary
+        self.max_deviation_pct = max_deviation_pct
+        self.require_secondary = require_secondary
+
+    def fetch(self) -> tuple[MarketSignals, list[DataPurchase]]:
+        primary_signals, purchases = self.primary.fetch()
+        secondary_signals, secondary_purchases = self.secondary.fetch()
+        purchases.extend(secondary_purchases)
+
+        degraded = primary_signals.degraded
+        deviations: dict[str, float] = {}
+        if secondary_signals.degraded and self.require_secondary:
+            degraded = True
+        for symbol, primary_price in primary_signals.prices.items():
+            secondary_price = secondary_signals.prices.get(symbol)
+            if (
+                primary_price is None
+                or secondary_price is None
+                or primary_price <= 0
+                or secondary_price <= 0
+            ):
+                continue
+            deviation = abs(primary_price / secondary_price - 1.0) * 100.0
+            deviations[symbol] = deviation
+            if deviation > self.max_deviation_pct:
+                degraded = True
+
+        return (
+            replace(
+                primary_signals,
+                degraded=degraded,
+                source_deviation_pct=deviations,
+            ),
+            purchases,
+        )

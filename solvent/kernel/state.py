@@ -75,5 +75,6 @@ class MarketSignals:
     volume_change_24h: dict[str, float] = field(default_factory=dict)
     volume_24h_usd: dict[str, float] = field(default_factory=dict)
     market_cap_usd: dict[str, float] = field(default_factory=dict)
+    source_deviation_pct: dict[str, float] = field(default_factory=dict)
     # True when any feed is stale/failed — forces fail-frozen behavior.
     degraded: bool = False

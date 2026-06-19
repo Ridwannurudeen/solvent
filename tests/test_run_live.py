@@ -5,7 +5,7 @@ from solvent import run as run_mod
 from solvent.exec.executor import TwakExecutor
 from solvent.exec.livebook import LiveBook
 from solvent.run import build_live
-from solvent.signals.sources import CMCSource
+from solvent.signals.sources import CMCSource, CrossCheckedSource
 
 
 def _set_live_env(monkeypatch):
@@ -21,7 +21,8 @@ def test_build_live_assembles_real_components(tmp_path, monkeypatch):
 
     _set_live_env(monkeypatch)
     source, executor, journal, book = build_live(tmp_path, RiskConfig())
-    assert isinstance(source, CMCSource)
+    assert isinstance(source, CrossCheckedSource)
+    assert isinstance(source.primary, CMCSource)
     assert isinstance(executor, TwakExecutor)
     assert isinstance(book, LiveBook)
     assert executor.chain == "bsc"  # default TWAK chain

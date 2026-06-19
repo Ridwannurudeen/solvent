@@ -160,19 +160,20 @@ verify. This writes the canonical policy packet served by `/policy`:
 cd /opt/solvent
 sudo -u solvent -H .venv/bin/python -m solvent.policy.manifest \
   --profile "${SOLVENT_RISK_PROFILE:-safety}" \
+  --sign-env \
+  --anchor \
   --out /opt/solvent/data-prod/policy-manifest.json
 ```
 
-If signing with the environment key is explicitly approved for the freeze run,
-add `--sign-env`; the command signs only the manifest hash and never prints the
-private key.
+The command signs only the manifest hash, anchors that hash under the ERC-8004
+identity, and never prints the private key.
 
 Fire one live cycle immediately instead of waiting for the hourly timer:
 
 ```bash
 sudo systemctl start solvent.service
 journalctl -u solvent.service -n 40 --no-pager
-curl -s https://solvent.gudman.xyz/state    # holdings now read from chain
+curl -s https://solvent.gudman.xyz/state    # holdings read from all pinned tokens
 curl -s https://solvent.gudman.xyz/signal   # latest ERC-8183-ready signal
 ```
 
@@ -236,6 +237,10 @@ sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.exec_recovery \
   --key '<journal-key>' --tx-hash 0x... --mined-at 2026-06-22T20:05:00Z
 ```
 
+`mark-confirmed` now reconstructs the pending intent and verifies the BSC
+receipt, sender, ERC-20 transfer logs, and post-trade balance movement before
+appending `CONFIRMED`.
+
 If no matching successful swap exists:
 
 ```bash
@@ -246,6 +251,20 @@ sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.exec_recovery \
 
 This appends a terminal journal row only. It does not edit receipts and does not
 call TWAK.
+
+## Persistent halt latch
+
+The kill switch latches `HALTED` after risk reduction, and deadman trades do not
+run while halted. Inspect or operate the latch explicitly:
+
+```bash
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.state_control \
+  --data-dir /opt/solvent/data-prod status
+sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.state_control \
+  --data-dir /opt/solvent/data-prod resume --reason 'operator reviewed drawdown and journal is clear'
+```
+
+`resume` refuses to run while the execution journal has unresolved attempts.
 
 ## Rollback
 

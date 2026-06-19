@@ -6,6 +6,7 @@ blind re-send of a value-moving call whose outcome is unknown. These tests
 exercise that without a real `twak` binary by stubbing subprocess.run.
 """
 
+import json
 from types import SimpleNamespace
 
 
@@ -98,7 +99,10 @@ def test_execute_requires_receipt_verifier_when_configured(tmp_path, monkeypatch
     seen = []
     monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: _ok_proc(tx=tx))
     journal = Journal(tmp_path / "journal.jsonl")
-    ex = TwakExecutor(journal, receipt_verifier=lambda h: seen.append(h) or {})
+    ex = TwakExecutor(
+        journal,
+        receipt_verifier=lambda _intent, h, _before: seen.append(h) or {},
+    )
 
     result = ex.execute(_intent(), CYCLE)
 
@@ -108,10 +112,39 @@ def test_execute_requires_receipt_verifier_when_configured(tmp_path, monkeypatch
     assert journal.state_of(result.intent_key) == "CONFIRMED"
 
 
+def test_execute_stores_pre_balances_and_verification(tmp_path, monkeypatch):
+    tx = "0x" + "ab" * 32
+    seen = []
+    monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: _ok_proc(tx=tx))
+    journal = Journal(tmp_path / "journal.jsonl")
+
+    def verifier(intent, tx_hash, before):
+        seen.append((intent.from_symbol, tx_hash, before))
+        return {"settled": True}
+
+    ex = TwakExecutor(
+        journal,
+        receipt_verifier=verifier,
+        balance_reader=lambda _intent: {"USDT": 10.0, "USDC": 0.0},
+    )
+
+    result = ex.execute(_intent(), CYCLE)
+
+    assert result.verification == {"settled": True}
+    assert seen == [("USDT", tx, {"USDT": 10.0, "USDC": 0.0})]
+    confirmed = journal.latest_entry(result.intent_key)
+    assert confirmed["verification"] == {"settled": True}
+    attempted = [
+        json.loads(line)
+        for line in (tmp_path / "journal.jsonl").read_text().splitlines()
+    ][0]
+    assert attempted["pre_balances"] == {"USDT": 10.0, "USDC": 0.0}
+
+
 def test_receipt_verifier_failure_leaves_attempt_unresolved(tmp_path, monkeypatch):
     monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: _ok_proc())
 
-    def fail(_tx_hash):
+    def fail(_intent, _tx_hash, _before):
         raise RuntimeError("receipt missing")
 
     journal = Journal(tmp_path / "journal.jsonl")

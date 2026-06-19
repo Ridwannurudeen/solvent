@@ -29,12 +29,12 @@ solvent/
     allocator.py   (state, signals, cfg) -> intents : sizing, stops, ratchet, kill switch
     allowlist.py   competition token allowlist + pinned BSC contract gate
     state.py       PortfolioState / MarketSignals / SleevePosition
-  signals/       market data layer (Binance + Fear&Greed paper source; CMC x402 for live)
+  signals/       market data layer (CMC x402 primary + Binance cross-check in live)
   brain/
     advisor.py     opt-in Claude regime advisor — a ONE-WAY de-risk ratchet only
   exec/
     executor.py    TwakExecutor (live, one-tx-per-intent) + PaperExecutor
-    livebook.py    live on-chain holdings reader (floor stables + open sleeve)
+    livebook.py    live holdings reader + tx receipt/log/balance settlement verifier
   receipts/
     chain.py       hash-chained receipt log + verify_chain()
     pretrade.py    optional ERC-8004 pre-trade commit publisher
@@ -53,13 +53,14 @@ The cardinal rule: **the kernel is pure and deterministic.** The LLM advisor can
 
 ## Strategy — the barbell (all values in `kernel/rules.py`)
 
-- **Floor:** ≥ **75%** of equity stays in floor stables (`floor_frac_min = 0.75`) at all times.
+- **Floor:** ≥ **75%** of equity stays in floor stables (`floor_frac_min = 0.75`) at all times; floor assets are conservatively marked at `min(reference price, $1)` minus the configured stable haircut.
 - **Sleeve:** at most **one** concurrent position (`max_positions = 1`), target **22%** of equity (`sleeve_frac_target = 0.22`), rotated into the single highest-momentum *executable* allowlist token above an entry bar.
-- **Entry gate:** flat **and** regime is `risk-on` **and** a candidate clears `MIN_ENTRY_MOMO`. Regime is classified conservatively from Fear & Greed + funding; missing data only ever downgrades the regime.
+- **Entry gate:** flat **and** regime is `risk-on` **and** a candidate clears `MIN_ENTRY_MOMO`. Regime is classified conservatively from Fear & Greed + funding; missing or cross-source-divergent data downgrades the regime.
 - **Per-position protection:** hard stop at **−12%** from entry (`stop_pct`), plus a momentum-decay exit when the score falls below **50%** of its entry value.
 - **Lock-in ratchet** (anti peak-drawdown DQ): after banked gains the sleeve cap tightens — **≥10% → 15%**, **≥20% → 10%**, **≥35% → 5%** — so winnings are de-risked into the floor rather than ridden back down.
-- **Kill switch:** if trailing drawdown from peak hits **22%** (`kill_switch_drawdown_pct`, a buffer below the 30% DQ line), liquidate the sleeve and freeze.
-- **Daily qualification:** a deadman path fires a $2 stable→stable micro-rotation after 20:00 UTC if no qualifying trade happened, satisfying the ≥1-trade/day rule even with every data feed down.
+- **Degraded-data unwind:** if a sleeve is open and data verification degrades, the allocator exits to floor instead of passively holding volatile risk.
+- **Kill switch:** if trailing drawdown from peak hits **22%** (`kill_switch_drawdown_pct`, a buffer below the 30% DQ line), liquidate the sleeve and latch `HALTED` until an explicit operator resume.
+- **Daily qualification:** a deadman path fires a $2 stable→stable micro-rotation after 20:00 UTC if no qualifying trade happened and the runtime is not persistently halted.
 - **Profit protection:** breakeven, trailing-stop, and partial take-profit rules exist in the kernel, but default live profiles leave them disabled unless a frozen policy manifest explicitly activates non-`999` thresholds.
 - **Competitive profile:** `conviction_50` keeps a 50% stable floor, can deploy a 48% sleeve, tightens the stop to 8%, requires a 10.0 momentum score, and suppresses momentum-decay exits for 48h. It is designed to reduce fee churn while keeping more upside than the default safety profile.
 
@@ -71,11 +72,11 @@ Each receipt line in `data/receipts.jsonl` commits to line *N-1*'s hash (`prev_h
 {"receipt": {
   "seq": 5, "prev_hash": "0x…", "ts": "2026-06-12T04:00:25+00:00",
   "phase": "cycle_summary", "cycle_id": "20260612T04",
-  "data_purchases": [{"tool": "binance:ticker24h+7d", "cost_usdc": 0.0, "ok": true}],
+  "data_purchases": [{"tool": "get_crypto_quotes_latest", "cost_usdc": 0.01, "ok": true, "response_hash": "0x…"}],
   "signals": {"fear_greed": 12, "regime_deterministic": "risk-off", "advisor": null, …},
   "regime": "risk-off", "thesis": "hold (risk-off)",
   "intents": [{"kind": "qualify", "from": "USDT", "to": "USDC", "notional_usd": 2.0}],
-  "executions": [{"key": "…", "ok": true, "tx_hash": "…"}],
+  "executions": [{"key": "…", "ok": true, "outcome": "executed_now", "tx_hash": "…", "verification": {"from_transfer_out": 2.0}}],
   "equity_usd": 300.0, "dq_headroom_pct": 0.3
 }, "hash": "0x…"}
 ```
@@ -113,9 +114,10 @@ The scored-week mandate can be frozen as canonical JSON:
 python -m solvent.policy.manifest --profile safety --out ./data/policy-manifest.json
 # optionally sign the manifest hash without printing the key:
 SOLVENT_PRIVATE_KEY=... python -m solvent.policy.manifest --profile safety --sign-env --out ./data/policy-manifest.json
+SOLVENT_ANCHOR_BACKEND=twak SOLVENT_AGENT_ID=... python -m solvent.policy.manifest --profile safety --sign-env --anchor --out ./data/policy-manifest.json
 ```
 
-The published `/policy` endpoint serves only that file; it returns 404 until a manifest is explicitly generated. Each manifest includes the git commit, risk profile, numerical limits, pinned token addresses, data/execution requirements, result outcome states, and `manifest_hash`.
+The published `/policy` endpoint serves only that file; it returns 404 until a manifest is explicitly generated. Each manifest includes the git commit, risk profile, numerical limits, pinned token addresses, data/execution requirements, settlement-verification requirements, result outcome states, `manifest_hash`, optional wallet signature, and optional ERC-8004 policy anchor tx.
 
 ## ERC-8004 on-chain anchoring
 
@@ -132,7 +134,7 @@ SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet SOLVENT_AGENT_ID=...
 
 ## Data & x402 spend metering
 
-Signals come from the data layer (paper mode: free Binance tickers + alternative.me Fear & Greed; live mode: CoinMarketCap x402 keyless endpoints). Every paid call is recorded in the receipt's `data_purchases` with its USD cost, and a session budget + per-call cap live in `RiskConfig` (`x402_session_budget_usdc`, `x402_max_per_call_usdc`). The point is honest metering surfaced per decision — not a performance claim. On BSC, SOLVENT prefers CMC's USD1 EIP-3009 offer because BSC USDC is currently permit2-only.
+Signals come from the data layer (paper mode: free Binance tickers + alternative.me Fear & Greed; live mode: CoinMarketCap x402 primary data with Binance public REST as an independent price cross-check). Every paid call is recorded in the receipt's `data_purchases` with its USD cost, response hash, and response byte count; a daily durable spend ledger plus per-call cap live in `RiskConfig` (`x402_session_budget_usdc`, `x402_max_per_call_usdc`). The point is honest metering surfaced per decision — not a performance claim. On BSC, SOLVENT prefers CMC's USD1 EIP-3009 offer because BSC USDC is currently permit2-only.
 
 ## Run it
 
@@ -160,7 +162,7 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, receipt hash-chain, inference commitments, policy manifest generator, ERC-8183 signal provider, read-only API, ERC-8004 anchors, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), and risk-profile backtests.
+- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, Binance live price cross-check, receipt hash-chain, raw data response commitments, inference commitments, signed/anchorable policy manifest generator, ERC-8183 signal provider, read-only API, ERC-8004 anchors, pre-trade anchors, intent-aware settlement verification, persistent halt latch, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), and risk-profile backtests.
 - **Live now:** production live-mode rehearsal is running hourly on BSC mainnet from `/opt/solvent/data-prod`; public holdings are read from the funded TWAK wallet; ERC-8004 identity `136384` and receipt-chain anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
 - **Scored-window gate:** the live stack is active before the June 22 trading window; do not present pre-window rehearsal PnL as scored-week PnL. Remaining gates are operational: keep the wallet funded, keep x402 USD1 available, keep watchdog/deadman timers healthy, and publish the repo/demo only after approval.
@@ -171,8 +173,8 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 |---|---|
 | Track 1 autonomous agent | Built as an executable hourly agent with deterministic rules, liveness heartbeat, watchdog, deadman daily qualification path, and systemd timers. |
 | Reads markets via CMC | Live mode uses `CMCSource` through the x402 MCP client, with `get_global_metrics_latest`, `get_crypto_quotes_latest`, and conditional derivatives metrics recorded per receipt. |
-| Signs/executes via TWAK | `TwakExecutor` is the only live execution path; quote-only BSC swaps are verified on the VPS. |
-| User-defined rules | Risk constitution enforces allowlist, one-position cap, floor reserve, per-trade sizing, slippage, stop, drawdown kill switch, and lock-in ratchet. |
+| Signs/executes via TWAK | `TwakExecutor` is the only live execution path; mined swaps must pass receipt status, sender, transfer-log, and balance-delta checks before state changes apply. |
+| User-defined rules | Risk constitution enforces allowlist, conservative stable marks, one-position cap, floor reserve, per-trade sizing, slippage, stop, drawdown kill switch, persistent halt, and lock-in ratchet. |
 | Live BSC trading week | Registered and already running live-mode rehearsal on BSC mainnet; scored-window results begin June 22. |
 | On-chain Track 1 registration | Registered in the BNB Hack competition contract: `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`. |
 | On-chain proof | ERC-8004 agent `136384` on BSC mainnet with daily receipt-chain anchors plus optional pre-trade anchors. |
