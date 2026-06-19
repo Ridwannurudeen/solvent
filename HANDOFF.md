@@ -5,7 +5,7 @@ below are closed. Everything in the "Done" section is committed, tested, pushed.
 
 ## State
 - Branch `fix/audit-remediation` → PR #1, base `codex/solvent-private-prep`.
-- 6 commits; `python -m pytest -q` → **244 passed**; `ruff check solvent tests` → clean.
+- 7 commits; `python -m pytest -q` → **244 passed**; `ruff check solvent tests` → clean.
 - A two-pass audit found 21 limitation clusters; all are addressed (FIX with a
   regression test each, or MITIGATE + honest docs for inherent design limits).
 - House rules: no Claude/Anthropic attribution in commits/PRs; never submit
@@ -28,7 +28,7 @@ below are closed. Everything in the "Done" section is committed, tested, pushed.
 - `d9939c3` #21/#9 `UnsetEnvironment=` strips signing secrets from the three
   read-only units (web, watcher, watchdog).
 
-## Open item 1 — finish #10 (swap-by-address) — CODE, needs the VPS
+## Closed item 1 — #10 swap-by-address ceiling verified on VPS
 The contract-address pin is enforced **pre-broadcast as an executability gate**
 (`solvent/exec/executor.py:241`, `is_executable` at `solvent/kernel/allowlist.py:274`)
 and **post-trade** by the settlement verifier, but the swap itself is issued by
@@ -38,33 +38,31 @@ resolver ever picks a wrong/honeypot token, funds move before the post-trade
 check runs.
 
 `RUNBOOK.md:27` and `RUNBOOK.md:117` document the surface as symbol-based
-(`twak swap USDT USDC --usd 1 --chain bsc --quote-only --json`); no address flag
-is documented. I could not verify the full `swap` flag set — there is no `twak`
-binary on the dev host.
+(`twak swap USDT USDC --usd 1 --chain bsc --quote-only --json`). Verified on
+the VPS with `twak 0.19.0`:
 
-**To resolve, on the VPS:**
 ```bash
 twak swap --help
 twak --version
 ```
-- If `swap` accepts a token-address/contract flag: pass the pinned
-  `ADDRESSES[symbol]` (`solvent/kernel/allowlist.py:221`) as `--from`/`--to`
-  address so the exact contract is bound at broadcast. Update
-  `TwakExecutor.execute` (`executor.py:297-308`) and `TwakExecutor.__init__`,
-  add a test in `tests/test_executor.py` asserting the address is in the argv.
-- If it only accepts symbols (most likely for the Trust Wallet CLI): the current
-  pre-broadcast gate + post-trade address check is the ceiling. Document that in
-  the `ADDRESSES` docstring (`allowlist.py:205-220`) and mark #10 final.
 
-## Open item 2 — deploy + verify on the VPS (no code; can't run on Windows)
-Repo lives at `/opt/solvent` (a git checkout); units install via
-`sudo bash ops/install.sh` (copies `ops/*.service` → `/etc/systemd/system`,
-`daemon-reload`, enable). nginx conf is `ops/solvent.gudman.xyz.conf` (path on
-the box not in install.sh — locate with `nginx -T | grep solvent`).
+Output shows only positional token symbols plus `--decimals`, `--usd`,
+`--chain`, `--to-chain`, `--slippage`, `--quote-only`, `--password`, and
+`--json`. There is no source/destination contract-address option. The current
+pre-broadcast gate + post-trade address check is the maximum safety boundary
+available through TWAK's swap CLI today. `ADDRESSES` already documents this
+symbol-only ceiling, and `tests/test_executor.py::test_non_executable_symbol_refused_before_broadcast`
+covers the pre-broadcast refusal path.
+
+## Open item 2 — deploy + verify on the VPS
+`/opt/solvent` is a deployed copy, not a git checkout. Deploy tracked files from
+the local PR branch with `git archive` so the real `solvent.env`, `.twak`,
+`.bnbagent`, `.venv`, `data`, and `data-prod` are not replaced.
 
 ```bash
-cd /opt/solvent && git fetch origin && git checkout fix/audit-remediation && git pull
-sudo bash ops/install.sh
+git archive fix/audit-remediation | ssh root@gudman.xyz 'tar -x -C /opt/solvent'
+ssh root@gudman.xyz 'chown -R solvent:solvent /opt/solvent'
+ssh root@gudman.xyz 'cd /opt/solvent && sudo bash ops/install.sh'
 # sandboxing didn't break writes + secrets stripped:
 systemd-analyze security solvent.service | tail -5
 sudo systemctl restart solvent-web.service
