@@ -14,6 +14,7 @@ from solvent.signals.x402pay import (
     BSC_USD1,
     EIP3009_TYPE_FIELDS,
     PaymentOffer,
+    SpendLedger,
     X402MCPClient,
     X402Payer,
     choose_offer,
@@ -90,6 +91,18 @@ class _ToolErrorClient(X402MCPClient):
         return self._responses.pop(0)
 
 
+class _PaidClient(X402MCPClient):
+    def __init__(self, ledger):
+        super().__init__(payer=_DummyPayer(), spend_ledger=ledger)
+        self._responses = [
+            _FakeResponse(402, headers={"PAYMENT-REQUIRED": fixture_header()}),
+            _FakeResponse(200, {"result": {"content": [{"text": "ok"}]}}),
+        ]
+
+    def _post(self, body, headers=None):
+        return self._responses.pop(0)
+
+
 def test_paid_tool_level_error_is_failed_purchase():
     result, purchase = _ToolErrorClient().call_tool("get_global_metrics_latest", {})
 
@@ -97,6 +110,26 @@ def test_paid_tool_level_error_is_failed_purchase():
     assert purchase.tool == "get_global_metrics_latest"
     assert purchase.ok is False
     assert purchase.cost_usdc == 0.0
+
+
+def test_spend_ledger_persists_daily_authorizations(tmp_path):
+    ledger = SpendLedger(tmp_path / "x402-spend.jsonl", daily_budget_usd=0.02)
+
+    result, purchase = _PaidClient(ledger).call_tool("get_global_metrics_latest", {})
+
+    assert result is not None
+    assert purchase.ok is True
+    assert purchase.cost_usdc == pytest.approx(0.01)
+    entry = json.loads((tmp_path / "x402-spend.jsonl").read_text().splitlines()[0])
+    assert ledger.spent_on(entry["ts"][:10]) == pytest.approx(0.01)
+
+
+def test_spend_ledger_refuses_restart_budget_overrun(tmp_path):
+    ledger = SpendLedger(tmp_path / "x402-spend.jsonl", daily_budget_usd=0.015)
+    _PaidClient(ledger).call_tool("get_global_metrics_latest", {})
+
+    with pytest.raises(ValueError, match="x402 daily budget exceeded"):
+        _PaidClient(ledger).call_tool("get_crypto_quotes_latest", {})
 
 
 # ── End-to-end signing with a throwaway key ───────────────────────────

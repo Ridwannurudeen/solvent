@@ -45,6 +45,19 @@ class _FailingExecutor:
         return ExecutionResult(intent_key(intent, cycle_id), False, None, "boom")
 
 
+class _AlreadyConfirmedExecutor:
+    """Executor reporting an old confirmed intent without a new fill."""
+
+    def execute(self, intent, cycle_id):
+        return ExecutionResult(
+            intent_key(intent, cycle_id),
+            True,
+            "0x" + "ab" * 32,
+            "already confirmed; skipped",
+            "already_confirmed",
+        )
+
+
 def _run(tmp_path, signals, holdings, store, now, executor=None, cfg=None):
     journal = Journal(tmp_path / "journal.jsonl")
     summary = run_cycle(
@@ -218,6 +231,32 @@ def test_failed_execution_recorded_without_corrupting_position(tmp_path):
     assert summary["executed_ok"] == 0  # but it failed
     assert receipt["executions"][0]["ok"] is False
     assert store.position is None  # a failed qualify never opened a position
+
+
+def test_already_confirmed_execution_does_not_mutate_position_state(tmp_path):
+    signals = MarketSignals(
+        fear_greed=60,
+        btc_funding_rate=0.0001,
+        momentum={"CAKE": 2.0},
+        prices={"CAKE": 2.5},
+        degraded=False,
+    )
+    store = StateStore(path=tmp_path / "state.json")
+
+    summary, receipt = _run(
+        tmp_path,
+        signals,
+        {"USDT": 300.0},
+        store,
+        NOON,
+        executor=_AlreadyConfirmedExecutor(),
+    )
+
+    assert summary["intents"] == 1
+    assert summary["executed_ok"] == 0
+    assert receipt["executions"][0]["ok"] is True
+    assert receipt["executions"][0]["outcome"] == "already_confirmed"
+    assert store.position is None
 
 
 def test_pre_trade_commit_and_execution_seal_wrap_intent(tmp_path):

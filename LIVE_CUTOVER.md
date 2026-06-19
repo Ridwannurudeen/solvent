@@ -19,6 +19,7 @@ sudo -u solvent -H .venv/bin/python -m solvent.ops.exec_recovery --data-dir /opt
 sudo -u solvent -H twak compete status
 sudo -u solvent -H twak wallet balance --chain bsc --json
 sudo -u solvent -H twak swap USDT USDC --usd 1 --chain bsc --quote-only --json
+sudo -u solvent -H .venv/bin/python -m solvent.policy.manifest --profile "${SOLVENT_RISK_PROFILE:-safety}" --out /opt/solvent/data-prod/policy-manifest.json
 ```
 
 Required outcomes:
@@ -31,6 +32,8 @@ Required outcomes:
   `0xE4fe23FB57dbb9AC2f685ea29B6b9A1409A0d359`.
 - BNB gas and in-scope stable balances are non-zero.
 - Quote-only TWAK swap succeeds on `bsc`.
+- `/opt/solvent/data-prod/policy-manifest.json` exists and its `manifest_hash`
+  is the policy hash referenced during the scored week.
 
 ## 2. Live data directory
 

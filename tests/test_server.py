@@ -3,8 +3,11 @@ from datetime import datetime, timezone
 
 from solvent.receipts.chain import ReceiptChain
 from solvent.receipts.server import (
+    anchor_coverage,
+    inference_commitments,
     inference_proofs,
     load_entries,
+    policy_manifest,
     state,
     summary,
     verify,
@@ -82,6 +85,20 @@ def test_inference_proofs_reports_proof_receipts(tmp_path):
             "proof": proof,
         }
     ]
+
+
+def test_inference_commitments_alias_matches_legacy_proofs(tmp_path):
+    p = tmp_path / "receipts.jsonl"
+    chain = ReceiptChain(p)
+    chain.append(
+        ts="2026-06-24T12:00:00+00:00",
+        phase="cycle_summary",
+        cycle_id="20260624T12",
+        inference_proof={"schema": "solvent.inference-commitment.v1"},
+        regime="risk-off",
+    )
+
+    assert inference_commitments(p) == inference_proofs(p)
 
 
 def test_summary_ignores_latest_execution_seal(tmp_path):
@@ -222,3 +239,69 @@ def test_state_anchors_sorted_newest_first(tmp_path):
         "2026-06-22",
     ]
     assert s["anchors"][0]["tx_hash"] == "0x33"
+
+
+def test_verify_reports_anchor_coverage_when_anchor_file_supplied(tmp_path):
+    p = tmp_path / "receipts.jsonl"
+    chain = ReceiptChain(p)
+    first = chain.append(ts="2026-06-24T12:00:00+00:00", regime="risk-off")
+    chain.append(ts="2026-06-24T13:00:00+00:00", regime="risk-on")
+    anchors = tmp_path / "anchors.json"
+    anchors.write_text(
+        json.dumps(
+            {
+                "2026-06-24": {
+                    "head_hash": first.hash,
+                    "tx_hash": "0x" + "11" * 32,
+                    "ts": "2026-06-24T23:55:00+00:00",
+                }
+            }
+        )
+    )
+
+    out = verify(p, anchors)
+
+    assert out["ok"] is True
+    assert out["count"] == 2
+    assert out["anchor_coverage"]["anchored_count"] == 1
+    assert out["anchor_coverage"]["anchored_seq"] == first.seq
+    assert out["anchor_coverage"]["unanchored_count"] == 1
+    assert out["anchor_coverage"]["anchor_matches_local_log"] is True
+
+
+def test_anchor_coverage_marks_unknown_anchor_head(tmp_path):
+    p = tmp_path / "receipts.jsonl"
+    chain = ReceiptChain(p)
+    chain.append(ts="2026-06-24T12:00:00+00:00", regime="risk-off")
+    entries = load_entries(p)
+
+    out = anchor_coverage(
+        entries,
+        {
+            "2026-06-24": {
+                "head_hash": "0x" + "22" * 32,
+                "tx_hash": "0x" + "11" * 32,
+            }
+        },
+    )
+
+    assert out["anchored_count"] == 0
+    assert out["unanchored_count"] == 1
+    assert out["anchor_matches_local_log"] is False
+
+
+def test_policy_manifest_reads_published_manifest(tmp_path):
+    (tmp_path / "policy-manifest.json").write_text(
+        json.dumps({"manifest_hash": "0x" + "ab" * 32, "manifest": {}})
+    )
+
+    out = policy_manifest(tmp_path)
+
+    assert out["manifest_hash"] == "0x" + "ab" * 32
+
+
+def test_policy_manifest_requires_published_manifest(tmp_path):
+    import pytest
+
+    with pytest.raises(ValueError, match="no policy manifest"):
+        policy_manifest(tmp_path)

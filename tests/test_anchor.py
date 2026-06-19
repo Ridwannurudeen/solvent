@@ -139,6 +139,7 @@ def test_anchors_head(tmp_path):
     assert out["head_hash"] == chain.head_hash
     assert reg.calls == [(7, "solvent:anchor:2026-06-24", chain.head_hash)]
     assert markers.has("2026-06-24")
+    assert markers.get("2026-06-24")["ts"] == DAY.isoformat()
 
 
 def test_skips_when_no_receipts(tmp_path):

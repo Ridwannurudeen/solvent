@@ -38,6 +38,8 @@ def test_inference_proof_hashes_are_stable():
     )
 
     assert proof["proof_hash"] == same["proof_hash"]
+    assert proof["commitment_hash"] == proof["proof_hash"]
+    assert proof["proof_type"] == "hash_commitment"
     assert proof["input_hash"] == sha256_json(proof["input"])
     assert proof["output_hash"] == sha256_json(proof["output"])
     assert proof["mode"] == "deterministic"
@@ -93,5 +95,5 @@ def test_engine_receipt_contains_inference_proof(tmp_path):
     receipt = json.loads((tmp_path / "receipts.jsonl").read_text().splitlines()[-1])[
         "receipt"
     ]
-    assert receipt["inference_proof"]["schema"] == "solvent.inference-proof.v1"
+    assert receipt["inference_proof"]["schema"] == "solvent.inference-commitment.v1"
     assert receipt["inference_proof"]["proof_hash"].startswith("0x")

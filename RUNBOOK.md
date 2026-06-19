@@ -153,6 +153,20 @@ drawdown, kill-switch, and daily requirements. It selects conservative profile
 `safety` during degraded or weak signal regimes and moves toward `conviction_50` /
 `tournament_60` only when momentum and broad risk appetite improve.
 
+Before the scored window, freeze the exact mandate that judges and operators can
+verify. This writes the canonical policy packet served by `/policy`:
+
+```bash
+cd /opt/solvent
+sudo -u solvent -H .venv/bin/python -m solvent.policy.manifest \
+  --profile "${SOLVENT_RISK_PROFILE:-safety}" \
+  --out /opt/solvent/data-prod/policy-manifest.json
+```
+
+If signing with the environment key is explicitly approved for the freeze run,
+add `--sign-env`; the command signs only the manifest hash and never prints the
+private key.
+
 Fire one live cycle immediately instead of waiting for the hourly timer:
 
 ```bash
@@ -199,7 +213,7 @@ Funded ERC-8183 jobs assigned to the agent wallet are processed by
 
 - `https://solvent.gudman.xyz` — equity flat→moving, holdings from chain, anchor panel populated.
 - A new receipt with real `executions[].tx_hash` (0x…) linking to BscScan.
-- `python verify_receipts.py` still `OK`; chain head matches `/verify` and the anchor tx.
+- `python verify_receipts.py` still `OK`; `/verify` reports local chain status and the number of receipts covered by the latest on-chain anchor.
 - Heartbeat fresh; `journalctl -u solvent.service` clean.
 
 ## Recover an unresolved TWAK attempt

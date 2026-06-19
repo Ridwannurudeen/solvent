@@ -224,10 +224,17 @@ def run_cycle(
             thesis=result.detail[:200],
             intents=[payload],
             executions=[
-                {"key": result.intent_key, "ok": result.ok, "tx_hash": result.tx_hash}
+                {
+                    "key": result.intent_key,
+                    "ok": result.ok,
+                    "tx_hash": result.tx_hash,
+                    "outcome": result.outcome,
+                }
             ],
             execution_seal={
                 "ok": result.ok,
+                "outcome": result.outcome,
+                "applies_state_change": result.applies_state_change,
                 "tx_hash": result.tx_hash,
                 "pre_trade_anchor_tx_hash": pre_trade_anchor_tx_hash,
                 "inference_proof_hash": inference_proof["proof_hash"],
@@ -237,7 +244,7 @@ def run_cycle(
             equity_usd=round(equity, 2),
             dq_headroom_pct=round(state.dq_headroom_pct, 4),
         )
-        if result.ok:
+        if result.applies_state_change:
             _apply_position_effect(store, intent, signals)
 
     receipt = receipts.append(
@@ -290,7 +297,13 @@ def run_cycle(
             for i in intents
         ],
         executions=[
-            {"key": e.intent_key, "ok": e.ok, "tx_hash": e.tx_hash} for e in executions
+            {
+                "key": e.intent_key,
+                "ok": e.ok,
+                "tx_hash": e.tx_hash,
+                "outcome": e.outcome,
+            }
+            for e in executions
         ],
         equity_usd=round(equity, 2),
         dq_headroom_pct=round(state.dq_headroom_pct, 4),
@@ -302,7 +315,7 @@ def run_cycle(
         "active_risk_profile": active_profile,
         "equity_usd": round(equity, 2),
         "intents": len(intents),
-        "executed_ok": sum(1 for e in executions if e.ok),
+        "executed_ok": sum(1 for e in executions if e.applies_state_change),
         "receipt_seq": receipt.seq,
         "receipt_hash": receipt.hash,
         "inference_proof_hash": inference_proof["proof_hash"],

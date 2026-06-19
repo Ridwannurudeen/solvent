@@ -22,6 +22,8 @@ import json
 import secrets
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
@@ -177,6 +179,47 @@ class X402Payer:
         ).decode()
 
 
+class SpendLedger:
+    """Durable x402 spend guard shared across one-shot process restarts."""
+
+    def __init__(self, path: Path, *, daily_budget_usd: float) -> None:
+        self.path = path
+        self.daily_budget_usd = daily_budget_usd
+
+    def _entries(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        return [json.loads(line) for line in self.path.read_text().splitlines() if line]
+
+    def spent_on(self, day: str) -> float:
+        return sum(
+            float(entry.get("cost_usd") or 0.0)
+            for entry in self._entries()
+            if str(entry.get("ts", ""))[:10] == day
+        )
+
+    def authorize(self, tool: str, offer: PaymentOffer) -> None:
+        now = datetime.now(timezone.utc)
+        day = now.strftime("%Y-%m-%d")
+        projected = self.spent_on(day) + offer.cost_usd
+        if projected > self.daily_budget_usd:
+            raise ValueError(
+                f"x402 daily budget exceeded: projected ${projected:.4f} "
+                f"> ${self.daily_budget_usd:.4f}"
+            )
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "ts": now.isoformat(),
+            "tool": tool,
+            "network": offer.network,
+            "asset": offer.asset,
+            "amount": offer.amount,
+            "cost_usd": offer.cost_usd,
+        }
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+
+
 class X402MCPClient:
     """MCP tools/call client that pays per request.
 
@@ -188,10 +231,12 @@ class X402MCPClient:
         self,
         url: str = "https://mcp.coinmarketcap.com/x402/mcp",
         payer: X402Payer | None = None,
+        spend_ledger: SpendLedger | None = None,
         timeout: float = 30.0,
     ) -> None:
         self.url = url
         self.payer = payer
+        self.spend_ledger = spend_ledger
         self._http = httpx.Client(timeout=timeout)
         self._id = 0
 
@@ -221,6 +266,8 @@ class X402MCPClient:
                 return None, DataPurchase(tool=name, cost_usdc=0.0, ok=False)
             challenge = resp.headers.get("PAYMENT-REQUIRED", "")
             offer = choose_offer(parse_payment_required(challenge))
+            if self.spend_ledger is not None:
+                self.spend_ledger.authorize(name, offer)
             header = self.payer.payment_header(
                 offer, resource={"url": f"X402_{name}", "description": name}
             )

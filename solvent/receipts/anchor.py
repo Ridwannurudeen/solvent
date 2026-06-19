@@ -140,8 +140,14 @@ class AnchorMarkers:
     def get(self, day: str) -> dict | None:
         return self.days.get(day)
 
-    def record(self, day: str, head_hash: str, tx_hash: str) -> None:
-        self.days[day] = {"head_hash": head_hash, "tx_hash": tx_hash}
+    def record(
+        self, day: str, head_hash: str, tx_hash: str | None, ts: datetime | None = None
+    ) -> None:
+        self.days[day] = {
+            "head_hash": head_hash,
+            "tx_hash": tx_hash,
+            "ts": (ts or datetime.now(timezone.utc)).isoformat(),
+        }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(self.days, indent=1))
 
@@ -181,7 +187,7 @@ def run_anchor(
 
     result = registry.set_metadata(agent_id, anchor_key(day), head)
     tx_hash = result.get("transactionHash")
-    markers.record(day, head, tx_hash)
+    markers.record(day, head, tx_hash, ts=now)
     action = "update_anchor" if existing else "anchor"
     return {"action": action, "tx_hash": tx_hash, "head_hash": head, "day": day}
 

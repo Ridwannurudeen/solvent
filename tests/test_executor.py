@@ -93,6 +93,38 @@ def test_execute_confirms_and_records_tx(tmp_path, monkeypatch):
     assert journal.state_of(result.intent_key) == "CONFIRMED"
 
 
+def test_execute_requires_receipt_verifier_when_configured(tmp_path, monkeypatch):
+    tx = "0x" + "ab" * 32
+    seen = []
+    monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: _ok_proc(tx=tx))
+    journal = Journal(tmp_path / "journal.jsonl")
+    ex = TwakExecutor(journal, receipt_verifier=lambda h: seen.append(h) or {})
+
+    result = ex.execute(_intent(), CYCLE)
+
+    assert result.ok is True
+    assert result.outcome == "executed_now"
+    assert seen == [tx]
+    assert journal.state_of(result.intent_key) == "CONFIRMED"
+
+
+def test_receipt_verifier_failure_leaves_attempt_unresolved(tmp_path, monkeypatch):
+    monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: _ok_proc())
+
+    def fail(_tx_hash):
+        raise RuntimeError("receipt missing")
+
+    journal = Journal(tmp_path / "journal.jsonl")
+    ex = TwakExecutor(journal, receipt_verifier=fail)
+
+    result = ex.execute(_intent(), CYCLE)
+
+    assert result.ok is False
+    assert result.outcome == "unresolved"
+    assert "receipt missing" in result.detail
+    assert journal.state_of(result.intent_key) == Journal.PENDING
+
+
 def test_already_confirmed_intent_is_skipped(tmp_path, monkeypatch):
     runs = []
     monkeypatch.setattr(
@@ -102,6 +134,9 @@ def test_already_confirmed_intent_is_skipped(tmp_path, monkeypatch):
     ex.execute(_intent(), CYCLE)  # confirms it
     again = ex.execute(_intent(), CYCLE)  # same key, same cycle
     assert again.ok is True
+    assert again.outcome == "already_confirmed"
+    assert again.applies_state_change is False
+    assert again.tx_hash is not None
     assert "already confirmed" in again.detail
     assert len(runs) == 1  # NOT re-sent
 
@@ -114,6 +149,7 @@ def test_unresolved_prior_attempt_refuses_resend(tmp_path, monkeypatch):
     monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: ran.append(1))
     result = ex.execute(_intent(), CYCLE)
     assert result.ok is False
+    assert result.outcome == "unresolved"
     assert "unresolved" in result.detail
     assert ran == []  # never sent
 
@@ -126,6 +162,7 @@ def test_any_unresolved_entry_halts_a_new_intent(tmp_path, monkeypatch):
     monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: ran.append(1))
     result = ex.execute(_intent(), CYCLE)  # a brand-new intent
     assert result.ok is False
+    assert result.outcome == "unresolved"
     assert "halted" in result.detail
     assert ran == []  # trading frozen until the dangling attempt resolves
 
@@ -141,6 +178,7 @@ def test_failed_prior_attempt_refuses_resend_same_key(tmp_path, monkeypatch):
     result = ex.execute(_intent(), CYCLE)
 
     assert result.ok is False
+    assert result.outcome == "failed"
     assert "failed" in result.detail
     assert ran == []
 
@@ -153,6 +191,7 @@ def test_timeout_leaves_attempt_unresolved_and_halts_next(tmp_path, monkeypatch)
     ex, journal = _twak(tmp_path)
     result = ex.execute(_intent(), CYCLE)
     assert result.ok is False
+    assert result.outcome == "unresolved"
     assert "timeout" in result.detail
     assert journal.has_unresolved() is True  # outcome unknown -> stays PENDING
     # The very next intent is now halted, even with a working binary.
@@ -170,6 +209,7 @@ def test_nonzero_exit_marks_failed_not_confirmed(tmp_path, monkeypatch):
     ex, journal = _twak(tmp_path)
     result = ex.execute(_intent(), CYCLE)
     assert result.ok is False
+    assert result.outcome == "unresolved"
     assert journal.state_of(result.intent_key) == Journal.PENDING
     assert journal.has_unresolved() is True
 
@@ -188,6 +228,8 @@ def test_ok_output_without_json_is_parsed_as_tx_hash(tmp_path, monkeypatch):
     result = ex.execute(_intent(), CYCLE)
 
     assert result.ok is True
+    assert result.outcome == "executed_now"
+    assert result.applies_state_change is True
     assert result.tx_hash == tx
     assert journal.state_of(result.intent_key) == "CONFIRMED"
 
@@ -204,6 +246,7 @@ def test_zero_exit_without_tx_hash_stays_unresolved(tmp_path, monkeypatch):
     result = ex.execute(_intent(), CYCLE)
 
     assert result.ok is False
+    assert result.outcome == "unresolved"
     assert journal.state_of(result.intent_key) == Journal.PENDING
     assert journal.has_unresolved() is True
 
@@ -251,4 +294,6 @@ def test_paper_executor_fills_and_is_idempotent(tmp_path):
     r1 = ex.execute(_intent(), CYCLE)
     assert r1.ok is True and r1.tx_hash.startswith("paper-")
     r2 = ex.execute(_intent(), CYCLE)
+    assert r2.outcome == "already_confirmed"
+    assert r2.applies_state_change is False
     assert "already confirmed" in r2.detail

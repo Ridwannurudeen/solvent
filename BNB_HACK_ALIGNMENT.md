@@ -10,7 +10,7 @@ SOLVENT is a Track 1 submission: Autonomous Trading Agents.
 
 | Requirement | Status | Evidence |
 |---|---:|---|
-| GitHub/GitLab/Bitbucket link | Pending | Private GitHub repo exists; make public only when approved for submission. |
+| GitHub/GitLab/Bitbucket link | Done | Public GitHub repo: `https://github.com/Ridwannurudeen/solvent`. |
 | On-chain proof: BSC agent address | Done | TWAK wallet `0xE4fe23FB57dbb9AC2f685ea29B6b9A1409A0d359`; ERC-8004 agent `136384`. |
 | Track 1 on-chain competition registration | Done | `twak compete status` returns `registered:true`; registration tx `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`. |
 | Reads markets via CMC | Implemented | Live mode uses `CMCSource` via x402 MCP calls for global metrics, quotes, and conditional derivatives data. |
@@ -20,7 +20,7 @@ SOLVENT is a Track 1 submission: Autonomous Trading Agents.
 | Minimum 1 trade/day | Implemented | Deadman service triggers a stable-to-stable qualification trade path if no trade has occurred. |
 | Fixed eligible token list | Implemented conservatively | Allowlist uses pinned BSC contracts for floor stables and selected in-scope sleeve tokens. |
 | Portfolio worth above $1 | Done | Wallet holds in-scope BSC floor stables above the $1 ranking floor. |
-| Public repo plus demo/setup | Pending | README/RUNBOOK provide setup; repo publication and demo video require approval. |
+| Public repo plus demo/setup | Partial | Public repo and setup docs are live; demo video still requires recording and approval. |
 | No token launch | Done | SOLVENT has no token launch, fundraising, LP opening, or airdrop component. |
 
 ## Special Prize Alignment
@@ -36,7 +36,7 @@ SOLVENT is a Track 1 submission: Autonomous Trading Agents.
 1. Rotate TWAK API credentials because credentials were pasted in chat.
 2. Keep the TWAK wallet funded with the final scored-week stake and gas.
 3. Keep production live mode isolated at `/opt/solvent/data-prod`.
-4. Record the real CMC x402 proof receipt, live rehearsal tx, `/signal`, and `/inference-proofs` in the demo.
-5. Make the repo public only when approved.
+4. Publish a frozen `/policy` manifest before the scored window.
+5. Record the real CMC x402 receipt, live rehearsal tx, `/signal`, and `/inference-commitments` in the demo.
 6. Record the 2-4 minute demo with live dashboard, BscScan anchor, verifier, and setup proof.
 7. Submit DoraHacks BUIDL only after explicit approval.

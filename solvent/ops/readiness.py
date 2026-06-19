@@ -152,15 +152,27 @@ def _public_checks(
         )
     )
 
-    ok, proofs_payload, detail = _fetch_json(fetcher, f"{base}/inference-proofs")
-    public["inference_proofs"] = proofs_payload
+    ok, policy_payload, detail = _fetch_json(fetcher, f"{base}/policy")
+    public["policy"] = policy_payload
     checks.append(
         _check(
-            "public_inference_proofs",
+            "public_policy_manifest",
+            ok and bool(policy_payload and policy_payload.get("manifest_hash")),
+            detail
+            if not policy_payload
+            else f"manifest_hash={policy_payload.get('manifest_hash')}",
+        )
+    )
+
+    ok, proofs_payload, detail = _fetch_json(fetcher, f"{base}/inference-commitments")
+    public["inference_commitments"] = proofs_payload
+    checks.append(
+        _check(
+            "public_inference_commitments",
             ok and isinstance(proofs_payload, list),
             detail
             if not isinstance(proofs_payload, list)
-            else f"{len(proofs_payload)} proofs",
+            else f"{len(proofs_payload)} commitments",
         )
     )
 
@@ -226,7 +238,6 @@ def readiness(
     checks.extend(_preflight_checks(report, profile))
 
     gates = [
-        "make GitHub repository public",
         "record and upload demo video",
         "submit DoraHacks BUIDL",
         "change scored-week stake or risk profile",

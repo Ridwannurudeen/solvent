@@ -6,10 +6,12 @@
 - Receipts: https://solvent.gudman.xyz/receipts
 - Verifier API: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
+- Policy manifest: https://solvent.gudman.xyz/policy
 - ERC-8183 signal payload: https://solvent.gudman.xyz/signal
-- Inference proofs: https://solvent.gudman.xyz/inference-proofs
+- Inference commitments: https://solvent.gudman.xyz/inference-commitments
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
 - Evidence page: https://solvent.gudman.xyz/proof
+- Public repo: https://github.com/Ridwannurudeen/solvent
 
 ## On-chain Proof
 
@@ -28,7 +30,7 @@
 - CMC x402 isolated receipt head: `0x282364a912a5090e83b4b522e5470ddba02203b3b3c77755e96bc515f89ba744`
 - CMC x402 isolated receipt contents: 3 paid CMC MCP calls, `$0.03` total data cost, `degraded=false`, 22 parsed token prices, 22 momentum scores, no trade because regime was `risk-off`.
 - Production live-mode rehearsal now reads wallet holdings directly from BSC mainnet through `LiveBook` and writes to `/opt/solvent/data-prod`.
-- New receipts include `inference_proof` packets. The public `/signal` payload binds the latest regime signal to the receipt hash, chain head, latest anchor, and inference proof hash.
+- New receipts include hash-bound inference commitment packets. The public `/signal` payload binds the latest regime signal to the receipt hash, chain head, latest anchor, and inference commitment hash.
 
 ## Current Boundary
 
@@ -40,7 +42,7 @@
 
 ## Submission-gated Items
 
-- Make the GitHub repository public.
+- Publish the frozen policy manifest for the scored week.
 - Record and upload the demo video.
 - Submit the DoraHacks BUIDL.
 - Increase or rebalance the scored-week stake only by explicit operator decision.

@@ -34,6 +34,7 @@ from ..kernel.rules import RiskConfig
 from ..receipts.chain import ReceiptChain
 from ..receipts.pretrade import build_pretrade_publisher
 from .alerts import alert
+from .lock import SingleWriterLock
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +105,17 @@ def run_deadman(
             thesis=result.detail[:200],
             intents=[payload],
             executions=[
-                {"key": result.intent_key, "ok": result.ok, "tx_hash": result.tx_hash}
+                {
+                    "key": result.intent_key,
+                    "ok": result.ok,
+                    "tx_hash": result.tx_hash,
+                    "outcome": result.outcome,
+                }
             ],
             execution_seal={
                 "ok": result.ok,
+                "outcome": result.outcome,
+                "applies_state_change": result.applies_state_change,
                 "tx_hash": result.tx_hash,
                 "pre_trade_anchor_tx_hash": pre_trade_anchor_tx_hash,
                 "detail": result.detail[:500],
@@ -125,11 +133,37 @@ def run_deadman(
 def make_executor(mode: str, journal: Journal, cfg: RiskConfig):
     if mode == "paper":
         return PaperExecutor(journal)
+    receipt_verifier = None
+    wallet_address = os.environ.get("SOLVENT_WALLET_ADDRESS")
+    if wallet_address:
+        from ..exec.livebook import LiveBook, make_web3
+
+        network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+        book = LiveBook(make_web3(network), wallet_address)
+
+        def verify_receipt(tx_hash: str) -> dict:
+            timeout = int(os.environ.get("SOLVENT_TX_RECEIPT_TIMEOUT_S", "180"))
+            receipt = book.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
+            if receipt.get("status") != 1:
+                raise RuntimeError(f"transaction reverted: {tx_hash}")
+            tx = book.w3.eth.get_transaction(tx_hash)
+            if tx.get("from", "").lower() != book.account.lower():
+                raise RuntimeError(
+                    f"transaction sender {tx.get('from')} does not match {book.account}"
+                )
+            return {
+                "tx_hash": tx_hash,
+                "block_number": receipt.get("blockNumber"),
+                "status": receipt.get("status"),
+            }
+
+        receipt_verifier = verify_receipt
     return TwakExecutor(
         journal,
         password=os.environ.get("TWAK_WALLET_PASSWORD"),
         chain=os.environ.get("SOLVENT_TWAK_CHAIN", "bsc"),
         slippage_pct=cfg.max_slippage_pct,
+        receipt_verifier=receipt_verifier,
     )
 
 
@@ -145,14 +179,21 @@ def main() -> int:
     )
 
     cfg = RiskConfig()
-    journal = Journal(args.data_dir / "journal.jsonl")
-    summary = run_deadman(
-        executor=make_executor(args.mode, journal, cfg),
-        journal=journal,
-        cfg=cfg,
-        receipts=ReceiptChain(args.data_dir / "receipts.jsonl"),
-        pretrade_publisher=build_pretrade_publisher(),
-    )
+    try:
+        with SingleWriterLock(args.data_dir / "writer.lock"):
+            journal = Journal(args.data_dir / "journal.jsonl")
+            summary = run_deadman(
+                executor=make_executor(args.mode, journal, cfg),
+                journal=journal,
+                cfg=cfg,
+                receipts=ReceiptChain(args.data_dir / "receipts.jsonl"),
+                pretrade_publisher=build_pretrade_publisher(),
+            )
+    except RuntimeError as exc:
+        if "state writer already active" in str(exc):
+            logger.warning("deadman skipped: %s", exc)
+            return 0
+        raise
     logger.info("deadman: %s", summary)
     if summary["action"] == "qualify":
         ok = summary["ok"]

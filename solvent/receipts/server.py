@@ -12,6 +12,7 @@ import json
 import logging
 import os
 from collections.abc import Callable
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -38,6 +39,71 @@ def _read_json(path: Path, default: object) -> object:
     if not path.exists():
         return default
     return json.loads(path.read_text())
+
+
+def _parse_ts(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _anchors(anchors_raw: object) -> list[dict]:
+    if not isinstance(anchors_raw, dict):
+        return []
+    return sorted(
+        (
+            {
+                "day": day,
+                "head_hash": rec.get("head_hash"),
+                "tx_hash": rec.get("tx_hash"),
+                "ts": rec.get("ts"),
+            }
+            for day, rec in anchors_raw.items()
+            if isinstance(rec, dict)
+        ),
+        key=lambda a: a["day"],
+        reverse=True,
+    )
+
+
+def anchor_coverage(
+    entries: list[dict],
+    anchors_raw: object,
+    *,
+    now: datetime | None = None,
+) -> dict:
+    anchors = _anchors(anchors_raw)
+    latest_anchor = anchors[0] if anchors else None
+    hash_to_seq = {entry["hash"]: entry["receipt"]["seq"] for entry in entries}
+    anchored_seq = None
+    anchor_matches_local_log = False
+    if latest_anchor and latest_anchor.get("head_hash") in hash_to_seq:
+        anchored_seq = hash_to_seq[latest_anchor["head_hash"]]
+        anchor_matches_local_log = True
+    anchored_count = anchored_seq + 1 if anchored_seq is not None else 0
+    anchor_ts = _parse_ts(latest_anchor.get("ts")) if latest_anchor else None
+    anchor_age_s = None
+    if anchor_ts is not None:
+        anchor_age_s = int(
+            ((now or datetime.now(timezone.utc)) - anchor_ts).total_seconds()
+        )
+    return {
+        "local_count": len(entries),
+        "local_head_hash": entries[-1]["hash"] if entries else "0x" + "0" * 64,
+        "anchored_count": anchored_count,
+        "anchored_seq": anchored_seq,
+        "anchored_head_hash": latest_anchor.get("head_hash") if latest_anchor else None,
+        "latest_anchor": latest_anchor,
+        "anchor_matches_local_log": anchor_matches_local_log,
+        "unanchored_count": max(0, len(entries) - anchored_count),
+        "anchor_age_s": anchor_age_s,
+    }
 
 
 def _live_holdings(position: dict | None) -> dict[str, float]:
@@ -86,18 +152,8 @@ def state(
     age = heartbeat_age(data_dir)
     cfg = RiskConfig()
     anchors_raw = _read_json(data_dir / "anchors.json", {})
-    anchors = sorted(
-        (
-            {
-                "day": day,
-                "head_hash": rec.get("head_hash"),
-                "tx_hash": rec.get("tx_hash"),
-            }
-            for day, rec in anchors_raw.items()
-        ),
-        key=lambda a: a["day"],
-        reverse=True,
-    )
+    entries = load_entries(data_dir / "receipts.jsonl")
+    anchors = _anchors(anchors_raw)
     agent_id = os.environ.get("SOLVENT_AGENT_ID")
     return {
         "start_equity_usd": st.get("start_equity_usd"),
@@ -109,6 +165,7 @@ def state(
         "heartbeat_age_s": age,
         "alive": age is not None and age < ALIVE_MAX_AGE_S,
         "anchors": anchors,
+        "anchor_coverage": anchor_coverage(entries, anchors_raw),
         "anchor_network": os.environ.get("SOLVENT_BSC_NETWORK", "bsc-testnet"),
         "agent_id": int(agent_id) if agent_id else None,
         "x402": {
@@ -118,11 +175,21 @@ def state(
     }
 
 
-def verify(path: Path) -> dict:
+def verify(path: Path, anchors_path: Path | None = None) -> dict:
     if not path.exists():
-        return {"ok": True, "count": 0, "head_hash": "0x" + "0" * 64}
+        payload = {"ok": True, "count": 0, "head_hash": "0x" + "0" * 64}
+        if anchors_path is not None:
+            payload["anchor_coverage"] = anchor_coverage(
+                [], _read_json(anchors_path, {})
+            )
+        return payload
     ok, count, head = verify_chain(path)
-    return {"ok": ok, "count": count, "head_hash": head}
+    payload = {"ok": ok, "count": count, "head_hash": head}
+    if anchors_path is not None:
+        payload["anchor_coverage"] = anchor_coverage(
+            load_entries(path), _read_json(anchors_path, {})
+        )
+    return payload
 
 
 def summary(path: Path) -> dict:
@@ -163,6 +230,20 @@ def inference_proofs(path: Path) -> list[dict]:
     return proofs
 
 
+def inference_commitments(path: Path) -> list[dict]:
+    return inference_proofs(path)
+
+
+def policy_manifest(data_dir: Path) -> dict:
+    path = data_dir / "policy-manifest.json"
+    if not path.exists():
+        raise ValueError("no policy manifest published")
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, dict) or "manifest_hash" not in payload:
+        raise ValueError("invalid policy manifest")
+    return payload
+
+
 class ReceiptHandler(BaseHTTPRequestHandler):
     data_dir: Path  # set on the class before serving
 
@@ -186,14 +267,21 @@ class ReceiptHandler(BaseHTTPRequestHandler):
         elif route == "/receipts":
             self._send(load_entries(self.receipts_path))
         elif route == "/verify":
-            self._send(verify(self.receipts_path))
+            self._send(verify(self.receipts_path, self.data_dir / "anchors.json"))
         elif route == "/state":
             self._send(state(self.data_dir))
         elif route == "/inference-proofs":
             self._send(inference_proofs(self.receipts_path))
+        elif route == "/inference-commitments":
+            self._send(inference_commitments(self.receipts_path))
         elif route == "/signal":
             try:
                 self._send(build_signal_payload(self.data_dir))
+            except ValueError as exc:
+                self._send({"error": str(exc)}, status=404)
+        elif route == "/policy":
+            try:
+                self._send(policy_manifest(self.data_dir))
             except ValueError as exc:
                 self._send({"error": str(exc)}, status=404)
         else:

@@ -68,7 +68,9 @@ def _fetcher(head_hash):
                     "signal_hash": "0x" + "22" * 32,
                 }
             )
-        if url.endswith("/inference-proofs"):
+        if url.endswith("/policy"):
+            return 200, json.dumps({"manifest_hash": "0x" + "33" * 32})
+        if url.endswith("/inference-commitments"):
             return 200, json.dumps([])
         if url.endswith("/proof"):
             return 200, "Mainnet evidence ... Track 1 registration"

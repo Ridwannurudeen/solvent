@@ -4,17 +4,17 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>How it works · SOLVENT</title>
-<meta name="description" content="SOLVENT's architecture: a deterministic barbell kernel, signed hash-chained decision receipts, local TWAK execution, and daily ERC-8004 anchoring." />
+<meta name="description" content="SOLVENT's architecture: a deterministic barbell kernel, hash-chained decision receipts, local TWAK execution, and daily ERC-8004 anchoring." />
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="%23F0B90B" d="M16 3l4 4-4 4-4-4zM16 21l4 4-4 4-4-4zM7 12l4 4-4 4-4-4zM25 12l4 4-4 4-4-4zM16 12l4 4-4 4-4-4z"/></svg>' />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="SOLVENT" />
 <meta property="og:title" content="How SOLVENT works" />
-<meta property="og:description" content="A deterministic barbell kernel, signed hash-chained decision receipts, local execution, and daily ERC-8004 anchoring on BNB Chain." />
+<meta property="og:description" content="A deterministic barbell kernel, hash-chained decision receipts, local execution, and daily ERC-8004 anchoring on BNB Chain." />
 <meta property="og:url" content="https://solvent.gudman.xyz/how-it-works" />
 <meta property="og:image" content="https://solvent.gudman.xyz/og.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="How SOLVENT works" />
-<meta name="twitter:description" content="A deterministic barbell kernel, signed hash-chained decision receipts, local execution, and daily ERC-8004 anchoring on BNB Chain." />
+<meta name="twitter:description" content="A deterministic barbell kernel, hash-chained decision receipts, local execution, and daily ERC-8004 anchoring on BNB Chain." />
 <meta name="twitter:image" content="https://solvent.gudman.xyz/og.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -59,8 +59,8 @@
   <section class="section">
     <div class="prose">
       <h2>Decision receipts</h2>
-      <p>Every cycle emits exactly one signed receipt: the data it bought and what each call cost, the signals it saw, the regime it inferred, its thesis, the intents it produced, and the resulting transactions. Each receipt commits to the previous one's hash, forming a chain — alter any past decision and every hash after it breaks.</p>
-      <p>The chain head is committed on-chain once a day under the agent's ERC-8004 identity, so the entire history is tamper-evident and publicly auditable: <a href="/proof">recompute it yourself</a> and compare the head with the on-chain anchor.</p>
+      <p>Every cycle emits exactly one hash-chained receipt: the data it bought and what each call cost, the signals it saw, the regime it inferred, its thesis, the intents it produced, and the resulting transactions. Each receipt commits to the previous one's hash, forming a chain — alter any past decision and every hash after it breaks.</p>
+      <p>The chain head is committed on-chain once a day under the agent's ERC-8004 identity, so the history is tamper-evident through wallet-signed checkpoints: <a href="/proof">recompute it yourself</a> and compare the local head and anchor coverage with the on-chain anchor.</p>
     </div>
   </section>
 

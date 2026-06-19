@@ -50,6 +50,8 @@ def test_signal_payload_binds_to_latest_receipt_and_anchor(tmp_path, monkeypatch
     assert payload["source"]["receipt_hash"] == rec.hash
     assert payload["source"]["receipt_head_hash"] == rec.hash
     assert payload["source"]["latest_anchor"]["head_hash"] == rec.hash
+    assert payload["proof"]["type"] == "hash_commitment"
+    assert payload["proof"]["inference_commitment_hash"] == proof["proof_hash"]
     assert payload["proof"]["inference_proof_hash"] == proof["proof_hash"]
     assert payload["signal"]["top_momentum"][0]["symbol"] == "CAKE"
     assert payload["signal_hash"].startswith("0x")

@@ -13,6 +13,7 @@ import logging
 import os
 import subprocess
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,15 @@ class ExecutionResult:
     ok: bool
     tx_hash: str | None
     detail: str
+    outcome: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.outcome:
+            object.__setattr__(self, "outcome", "executed_now" if self.ok else "failed")
+
+    @property
+    def applies_state_change(self) -> bool:
+        return self.outcome == "executed_now"
 
 
 def _extract_tx_hash(output: str) -> str | None:
@@ -178,6 +188,7 @@ class TwakExecutor:
         chain: str = "bsc",
         slippage_pct: float = 1.0,
         timeout_s: int = 180,
+        receipt_verifier: Callable[[str], dict] | None = None,
     ) -> None:
         self.journal = journal
         self._password = password
@@ -185,23 +196,43 @@ class TwakExecutor:
         self.chain = chain
         self.slippage_pct = slippage_pct
         self.timeout_s = timeout_s
+        self.receipt_verifier = receipt_verifier
 
     def execute(self, intent: TradeIntent, cycle_id: str) -> ExecutionResult:
         key = intent_key(intent, cycle_id)
         prior = self.journal.state_of(key)
         if prior == "CONFIRMED":
-            return ExecutionResult(key, True, None, "already confirmed; skipped")
+            entry = self.journal.latest_entry(key) or {}
+            return ExecutionResult(
+                key,
+                True,
+                entry.get("tx_hash"),
+                "already confirmed; skipped",
+                "already_confirmed",
+            )
         if prior == Journal.PENDING:
             return ExecutionResult(
-                key, False, None, "prior attempt unresolved; refusing to re-send"
+                key,
+                False,
+                None,
+                "prior attempt unresolved; refusing to re-send",
+                "unresolved",
             )
         if prior == "FAILED":
             return ExecutionResult(
-                key, False, None, "prior attempt failed; refusing to re-send same key"
+                key,
+                False,
+                None,
+                "prior attempt failed; refusing to re-send same key",
+                "failed",
             )
         if self.journal.has_unresolved():
             return ExecutionResult(
-                key, False, None, "journal has unresolved attempts; trading halted"
+                key,
+                False,
+                None,
+                "journal has unresolved attempts; trading halted",
+                "unresolved",
             )
 
         self.journal.mark_attempted(key, intent)
@@ -229,16 +260,26 @@ class TwakExecutor:
             )
         except subprocess.TimeoutExpired:
             logger.error("swap timed out; outcome UNKNOWN — halting further sends")
-            return ExecutionResult(key, False, None, "timeout: outcome unknown")
+            return ExecutionResult(
+                key, False, None, "timeout: outcome unknown", "unresolved"
+            )
 
         out = proc.stdout.strip() or proc.stderr.strip()
         tx_hash = _extract_tx_hash(out)
         ok = proc.returncode == 0 and tx_hash is not None
         if not ok:
             logger.error("twak attempt outcome UNKNOWN - halting further sends")
-            return ExecutionResult(key, False, tx_hash, out[:200])
+            return ExecutionResult(key, False, tx_hash, out[:200], "unresolved")
+        if self.receipt_verifier is not None:
+            try:
+                self.receipt_verifier(tx_hash)
+            except Exception as exc:
+                logger.error("tx receipt verification failed; outcome UNKNOWN")
+                return ExecutionResult(
+                    key, False, tx_hash, str(exc)[:200], "unresolved"
+                )
         self.journal.mark_result(key, ok, tx_hash, out)
-        return ExecutionResult(key, ok, tx_hash, out[:200])
+        return ExecutionResult(key, ok, tx_hash, out[:200], "executed_now")
 
 
 class PaperExecutor:
@@ -250,7 +291,16 @@ class PaperExecutor:
     def execute(self, intent: TradeIntent, cycle_id: str) -> ExecutionResult:
         key = intent_key(intent, cycle_id)
         if self.journal.state_of(key) == "CONFIRMED":
-            return ExecutionResult(key, True, None, "already confirmed; skipped")
+            entry = self.journal.latest_entry(key) or {}
+            return ExecutionResult(
+                key,
+                True,
+                entry.get("tx_hash"),
+                "already confirmed; skipped",
+                "already_confirmed",
+            )
         self.journal.mark_attempted(key, intent)
         self.journal.mark_result(key, True, f"paper-{key[-8:]}", "paper fill")
-        return ExecutionResult(key, True, f"paper-{key[-8:]}", "paper fill")
+        return ExecutionResult(
+            key, True, f"paper-{key[-8:]}", "paper fill", "executed_now"
+        )

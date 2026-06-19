@@ -1,7 +1,7 @@
 # SOLVENT Submission Packet
 
-Use this packet when the repo is approved for public release and the demo video
-is ready. Do not submit the DoraHacks form from automation.
+Use this packet when the demo video is ready. The repo is public; do not submit
+the DoraHacks form from automation.
 
 ## DoraHacks Fields
 
@@ -22,7 +22,7 @@ receipt that includes data bought, cost, inferred regime, thesis, intents, and
 execution tx hash. Receipts are hash-chained and the daily head is anchored
 on-chain under ERC-8004 agent `136384`.
 
-**Repository:** pending public release approval
+**Repository:** https://github.com/Ridwannurudeen/solvent
 
 **Demo:** pending recording/upload
 
@@ -34,8 +34,9 @@ on-chain under ERC-8004 agent `136384`.
 - Receipts: https://solvent.gudman.xyz/receipts
 - Verifier API: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
+- Policy manifest: https://solvent.gudman.xyz/policy
 - ERC-8183 signal payload: https://solvent.gudman.xyz/signal
-- Inference proofs: https://solvent.gudman.xyz/inference-proofs
+- Inference commitments: https://solvent.gudman.xyz/inference-commitments
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
 - Evidence page: https://solvent.gudman.xyz/proof
 
@@ -93,9 +94,9 @@ drawdown gate:
 - Money-moving intents produce a pre-trade commit receipt before execution and
   an execution seal after the result. Production proof mode can publish the
   pre-trade commit hash to ERC-8004 before the TWAK swap.
-- New receipts include proof-of-inference style packets that hash-bind the
-  signal input, effective regime output, and model/kernel ID into the receipt
-  chain.
+- New receipts include inference commitment packets that hash-bind the signal
+  input, effective regime output, and model/kernel ID into the receipt chain.
+  They are commitments, not TEE or zk proofs that a model executed.
 
 The optional advisor can only de-risk. It cannot force a larger trade or bypass
 the deterministic kernel.
@@ -114,19 +115,20 @@ the deterministic kernel.
 
 ## Demo Shot List
 
-1. Dashboard with chain-verified status.
+1. Dashboard with local-chain verification and anchor-coverage status.
 2. `/receipts` showing data purchases and receipt hashes.
 3. A `pre_trade_commit` followed by an `execution_seal`.
 4. CMC x402 receipt or live proof showing non-zero data cost.
 5. TWAK live rehearsal tx on BscScan.
-6. `/inference-proofs` showing input/output/proof hashes.
+6. `/inference-commitments` showing input/output/commitment hashes.
 7. `/signal` showing the ERC-8183-ready paid signal payload.
 8. `python verify_receipts.py` matching `/verify`.
 9. ERC-8004 anchor in `/state` and BscScan.
-10. Strategy/risk constitution in `kernel/rules.py`.
+10. Strategy/risk constitution in `kernel/rules.py` and frozen `/policy` manifest.
 
 ## Do Not Claim
 
 - Do not present paper-mode PnL as scored-week live PnL.
-- Do not claim public repo availability before the repo is actually made public.
+- Do not claim every individual receipt is wallet-signed; the receipt log is hash-chained and covered by periodic wallet-signed on-chain checkpoints.
+- Do not call inference commitments TEE, zk, or runtime proofs.
 - Do not claim pre-June-22 live rehearsal PnL is scored-week leaderboard PnL.

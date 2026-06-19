@@ -15,9 +15,10 @@ SOLVENT is a glass-box BSC trading agent: it reads CMC market data, decides unde
 - Public verifier: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
 - ERC-8183 signal payload: https://solvent.gudman.xyz/signal
-- Inference proofs: https://solvent.gudman.xyz/inference-proofs
+- Policy manifest: https://solvent.gudman.xyz/policy
+- Inference commitments: https://solvent.gudman.xyz/inference-commitments
 - Evidence page: https://solvent.gudman.xyz/proof
-- GitHub: pending public release approval
+- GitHub: https://github.com/Ridwannurudeen/solvent
 - Demo video: pending recording
 
 ## On-chain Proof
@@ -63,14 +64,13 @@ curl -s https://solvent.gudman.xyz/verify
 python verify_receipts.py
 ```
 
-The verifier recomputes the public receipt hash chain and prints the head hash. The latest daily head is also committed on BSC as ERC-8004 metadata.
+The verifier recomputes the public receipt hash chain and prints the head hash. `/verify` also reports how many local receipts are covered by the latest on-chain anchor versus still unanchored. The latest daily head is committed on BSC as ERC-8004 metadata.
 
 ## Current Gates
 
-- Rotate exposed TWAK API credentials before live trading.
 - Keep the wallet funded with the final scored-week stake and gas.
 - Keep live mode isolated at `/opt/solvent/data-prod` so paper and live accounting never mix.
-- Make the GitHub repo public after explicit approval.
+- Publish the frozen policy manifest at `/policy`.
 - Record and attach the demo video.
 
 ## Compliance Notes

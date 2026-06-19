@@ -24,6 +24,7 @@ from .exec.executor import Journal, PaperExecutor
 from .kernel.rules import RiskConfig, risk_config_for_profile
 from .kernel.state import MarketSignals, PortfolioState
 from .ops.alerts import alert
+from .ops.lock import SingleWriterLock
 from .receipts.chain import ReceiptChain
 from .receipts.pretrade import build_pretrade_publisher
 from .signals.sources import BinanceSource
@@ -136,7 +137,7 @@ class PaperCycleExecutor(PaperExecutor):
 
     def execute(self, intent, cycle_id):
         result = super().execute(intent, cycle_id)
-        if result.ok and self._signals is not None and "skipped" not in result.detail:
+        if result.applies_state_change and self._signals is not None:
             self.book.apply(intent, self._signals)
         return result
 
@@ -182,7 +183,7 @@ def build_live(data_dir: Path, cfg: RiskConfig):
     from .exec.executor import TwakExecutor
     from .exec.livebook import LiveBook, make_web3
     from .signals.sources import CMCSource
-    from .signals.x402pay import TOKEN_DECIMALS, X402MCPClient, X402Payer
+    from .signals.x402pay import TOKEN_DECIMALS, SpendLedger, X402MCPClient, X402Payer
 
     def _require(name: str) -> str:
         value = os.environ.get(name)
@@ -225,7 +226,32 @@ def build_live(data_dir: Path, cfg: RiskConfig):
             for (_n, asset), dec in TOKEN_DECIMALS.items()
         },
     )
-    source = CMCSource(X402MCPClient(payer=X402Payer(signer)))
+    source = CMCSource(
+        X402MCPClient(
+            payer=X402Payer(signer),
+            spend_ledger=SpendLedger(
+                data_dir / "x402-spend.jsonl", daily_budget_usd=budget_usd
+            ),
+        )
+    )
+
+    book = LiveBook(make_web3(network), wallet_address)
+
+    def verify_receipt(tx_hash: str) -> dict:
+        timeout = int(os.environ.get("SOLVENT_TX_RECEIPT_TIMEOUT_S", "180"))
+        receipt = book.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
+        if receipt.get("status") != 1:
+            raise RuntimeError(f"transaction reverted: {tx_hash}")
+        tx = book.w3.eth.get_transaction(tx_hash)
+        if tx.get("from", "").lower() != book.account.lower():
+            raise RuntimeError(
+                f"transaction sender {tx.get('from')} does not match {book.account}"
+            )
+        return {
+            "tx_hash": tx_hash,
+            "block_number": receipt.get("blockNumber"),
+            "status": receipt.get("status"),
+        }
 
     journal = Journal(data_dir / "journal.jsonl")
     executor = TwakExecutor(
@@ -233,9 +259,9 @@ def build_live(data_dir: Path, cfg: RiskConfig):
         password=twak_password,
         chain=twak_chain,
         slippage_pct=cfg.max_slippage_pct,
+        receipt_verifier=verify_receipt,
     )
 
-    book = LiveBook(make_web3(network), wallet_address)
     return source, executor, journal, book
 
 
@@ -292,23 +318,31 @@ def main() -> int:
 
     def one_cycle() -> bool:
         try:
-            summary = run_cycle(
-                source=source,
-                executor=executor,
-                journal=journal,
-                receipts=receipts,
-                store=store,
-                holdings=holdings_now(),
-                cfg=cfg,
-                cfg_selector=adaptive_selector,
-                advisor=advisor,
-                pretrade_publisher=pretrade_publisher,
-            )
+            with SingleWriterLock(data_dir / "writer.lock"):
+                summary = run_cycle(
+                    source=source,
+                    executor=executor,
+                    journal=journal,
+                    receipts=receipts,
+                    store=store,
+                    holdings=holdings_now(),
+                    cfg=cfg,
+                    cfg_selector=adaptive_selector,
+                    advisor=advisor,
+                    pretrade_publisher=pretrade_publisher,
+                )
+                heartbeat = data_dir / "heartbeat"
+                heartbeat.write_text(datetime.now(timezone.utc).isoformat())
             if summary["intents"] > 0 or summary["degraded"]:
                 alert(f"SOLVENT [{args.mode}] {json.dumps(summary)}")
-            heartbeat = data_dir / "heartbeat"
-            heartbeat.write_text(datetime.now(timezone.utc).isoformat())
             return True
+        except RuntimeError as exc:
+            if "state writer already active" in str(exc):
+                logger.warning("%s", exc)
+                return True
+            logger.exception("cycle failed")
+            alert(f"SOLVENT [{args.mode}] CYCLE FAILED — check logs")
+            return False
         except Exception:
             logger.exception("cycle failed")
             alert(f"SOLVENT [{args.mode}] CYCLE FAILED — check logs")

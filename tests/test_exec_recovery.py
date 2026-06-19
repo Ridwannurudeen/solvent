@@ -76,6 +76,7 @@ def test_mark_confirmed_can_use_mined_at_for_confirmed_day(tmp_path, capsys):
                 tx_hash,
                 "--mined-at",
                 "2026-06-25T01:02:03Z",
+                "--skip-chain-check",
             ]
         )
         == 0
@@ -87,6 +88,23 @@ def test_mark_confirmed_can_use_mined_at_for_confirmed_day(tmp_path, capsys):
     journal = Journal(tmp_path / "journal.jsonl")
     assert journal.has_unresolved() is False
     assert journal.confirmed_trades_on("2026-06-25") == 1
+
+
+def test_mark_confirmed_requires_chain_check_by_default(tmp_path):
+    _, key = _pending(tmp_path)
+
+    with pytest.raises(SystemExit, match="wallet-address"):
+        main(
+            [
+                "--data-dir",
+                str(tmp_path),
+                "mark-confirmed",
+                "--key",
+                key,
+                "--tx-hash",
+                "0x" + "ab" * 32,
+            ]
+        )
 
 
 def test_mark_failed_requires_operator_reason(tmp_path):
@@ -149,5 +167,6 @@ def test_mark_confirmed_refuses_non_pending_entry(tmp_path):
                 key,
                 "--tx-hash",
                 "0x" + "ab" * 32,
+                "--skip-chain-check",
             ]
         )

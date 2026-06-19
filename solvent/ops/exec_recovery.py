@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..exec.executor import Journal
+from ..exec.livebook import make_web3
 
 TX_HASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
@@ -42,6 +43,29 @@ def _parse_mined_at(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _verify_chain_receipt(tx_hash: str, *, wallet_address: str, network: str) -> dict:
+    from web3 import Web3
+
+    w3 = make_web3(network)
+    receipt = w3.eth.get_transaction_receipt(tx_hash)
+    if receipt is None:
+        raise SystemExit(f"transaction not found on {network}: {tx_hash}")
+    if receipt.get("status") != 1:
+        raise SystemExit(f"transaction did not succeed on {network}: {tx_hash}")
+    tx = w3.eth.get_transaction(tx_hash)
+    sender = tx.get("from")
+    if Web3.to_checksum_address(sender) != Web3.to_checksum_address(wallet_address):
+        raise SystemExit(
+            f"transaction sender {sender} does not match wallet {wallet_address}"
+        )
+    return {
+        "network": network,
+        "block_number": receipt.get("blockNumber"),
+        "status": receipt.get("status"),
+        "from": sender,
+    }
+
+
 def _journal(data_dir: Path) -> Journal:
     return Journal(data_dir / "journal.jsonl")
 
@@ -58,16 +82,35 @@ def mark_confirmed(
     tx_hash: str,
     mined_at: datetime | None,
     detail: str | None,
+    wallet_address: str | None,
+    network: str,
+    skip_chain_check: bool,
 ) -> int:
+    valid_tx_hash = _validate_tx_hash(tx_hash, required=True)
+    chain_check = None
+    if not skip_chain_check:
+        if not wallet_address:
+            raise SystemExit(
+                "--wallet-address or SOLVENT_WALLET_ADDRESS is required "
+                "unless --skip-chain-check is set"
+            )
+        chain_check = _verify_chain_receipt(
+            valid_tx_hash, wallet_address=wallet_address, network=network
+        )
     journal = _journal(data_dir)
     entry = journal.resolve_attempt(
         key,
         ok=True,
-        tx_hash=_validate_tx_hash(tx_hash, required=True),
-        detail=detail or "operator confirmed transaction on-chain",
+        tx_hash=valid_tx_hash,
+        detail=detail
+        or (
+            f"chain-verified transaction on {network}"
+            if chain_check
+            else "operator confirmed transaction on-chain without RPC check"
+        ),
         ts=mined_at,
     )
-    _print({"resolved": entry})
+    _print({"resolved": entry, "chain_check": chain_check})
     return 0
 
 
@@ -107,6 +150,17 @@ def main(argv: list[str] | None = None) -> int:
     confirmed.add_argument("--tx-hash", required=True)
     confirmed.add_argument("--mined-at")
     confirmed.add_argument("--detail")
+    confirmed.add_argument(
+        "--network", default=os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+    )
+    confirmed.add_argument(
+        "--wallet-address", default=os.environ.get("SOLVENT_WALLET_ADDRESS")
+    )
+    confirmed.add_argument(
+        "--skip-chain-check",
+        action="store_true",
+        help="operator override: do not query RPC before appending CONFIRMED",
+    )
 
     failed = subparsers.add_parser("mark-failed")
     failed.add_argument("--key", required=True)
@@ -124,6 +178,9 @@ def main(argv: list[str] | None = None) -> int:
                 tx_hash=args.tx_hash,
                 mined_at=_parse_mined_at(args.mined_at),
                 detail=args.detail,
+                wallet_address=args.wallet_address,
+                network=args.network,
+                skip_chain_check=args.skip_chain_check,
             )
         return mark_failed(
             args.data_dir,

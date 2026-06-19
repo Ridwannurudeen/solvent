@@ -110,10 +110,18 @@ function inferMode(entries) {
 /* ── renderers (each guarded by mount presence) ─────────── */
 function renderNavStatus(ver) {
   const el = $("#navStatus");
-  if (el)
+  if (el) {
+    const coverage = ver.anchor_coverage || {};
+    const unanchored =
+      coverage.unanchored_count != null ? coverage.unanchored_count : null;
+    const anchorNote =
+      unanchored == null
+        ? ""
+        : ` · ${unanchored} receipt${unanchored === 1 ? "" : "s"} unanchored`;
     el.innerHTML = ver.ok
-      ? `<span class="dot ok pulse"></span> chain verified · ${ver.count} receipts`
-      : `<span class="dot bad"></span> chain tampered`;
+      ? `<span class="dot ok pulse"></span> local chain verified · ${ver.count} receipts${anchorNote}`
+      : `<span class="dot bad"></span> local chain tampered`;
+  }
   const hh = $("#headHash");
   if (hh) hh.textContent = ver.head_hash;
 }
@@ -143,7 +151,7 @@ function renderTeaser(entries, ver, st) {
     ["Equity", last ? esc(fmtUsd(last.equity_usd)) : "—", ""],
     ["Return", pct(ret), trendClass(ret)],
     ["Decisions", `${ver.count}`, ""],
-    ["Chain", ver.ok ? "verified" : "tampered", ver.ok ? "up" : "down"],
+    ["Local chain", ver.ok ? "verified" : "tampered", ver.ok ? "up" : "down"],
   ];
   el.innerHTML = cards
     .map(
@@ -479,7 +487,17 @@ function renderAnchors(st) {
     return;
   }
   const base = explorerBase(net);
+  const coverage = st.anchor_coverage || {};
+  const coverageHtml =
+    coverage.local_count != null
+      ? `<div class="card-pad" style="border-bottom:1px solid var(--line);display:grid;gap:6px">
+          <div><b>Local chain verified through</b> ${Number(coverage.local_count || 0)} receipt${coverage.local_count === 1 ? "" : "s"}.</div>
+          <div><b>On-chain anchored through</b> ${coverage.anchored_seq == null ? "no matching local receipt yet" : "receipt #" + esc(coverage.anchored_seq)}.</div>
+          <div><b>Unanchored receipts</b> ${Number(coverage.unanchored_count || 0)}.</div>
+        </div>`
+      : "";
   el.innerHTML =
+    coverageHtml +
     `<table><thead><tr><th>Day (UTC)</th><th>Anchored head</th><th>Transaction (${esc(net)})</th></tr></thead><tbody>` +
     st.anchors
       .map(

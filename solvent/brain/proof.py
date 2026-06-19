@@ -1,4 +1,4 @@
-"""Hash-bound inference proof packets for decision receipts."""
+"""Hash-bound inference commitment packets for decision receipts."""
 
 import hashlib
 import json
@@ -8,7 +8,7 @@ from ..kernel.allocator import Regime
 from ..kernel.state import MarketSignals
 from .advisor import MODEL, RegimeAdvice
 
-SCHEMA = "solvent.inference-proof.v1"
+SCHEMA = "solvent.inference-commitment.v1"
 
 
 def canonical_json(payload: dict[str, Any]) -> str:
@@ -55,11 +55,12 @@ def build_inference_proof(
     position_symbol: str | None,
     advice: RegimeAdvice | None,
 ) -> dict[str, Any]:
-    """Create a reproducible proof packet for the regime decision.
+    """Create a reproducible commitment packet for the regime decision.
 
-    This is not a TEE attestation. It is a proof-of-inference style packet:
-    a stable input hash, output hash, and proof hash that binds the model/kernel
-    read to the receipt hash chain and lets reviewers recompute what was used.
+    This is not a TEE attestation or proof that a model ran. It is a stable
+    input hash, output hash, and commitment hash that binds the model/kernel
+    read to the receipt hash chain so reviewers can recompute the committed
+    bytes.
     """
     mode = "advisor" if advice is not None else "deterministic"
     input_payload = {
@@ -91,7 +92,10 @@ def build_inference_proof(
         "model_id": model_id,
         "input_hash": input_hash,
         "output_hash": output_hash,
+        "commitment_hash": proof_hash,
         "proof_hash": proof_hash,
+        "proof_type": "hash_commitment",
+        "verification_scope": "commits declared inputs and outputs; does not attest runtime execution",
         "input": input_payload,
         "output": output_payload,
     }

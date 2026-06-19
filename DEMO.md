@@ -21,7 +21,7 @@ past the six panels.
 Every decision it has ever made is on this page — what data it bought, what it
 cost, why it traded, and a hash you can recompute yourself. It's a glass box."
 
-> On-screen callout: the green **CHAIN VERIFIED** badge.
+> On-screen callout: the green **LOCAL CHAIN VERIFIED** badge and unanchored receipt count.
 
 ## Scene 1 — The data purchase (0:20–0:50) · [NOW]
 
@@ -60,19 +60,19 @@ also local. Here's the resulting swap, confirmed on BSC."
 
 > Use the live rehearsal tx if the current hour has no new sleeve trade.
 
-## Scene 4 — The receipt and inference proof (2:05–2:35) · [NOW]
+## Scene 4 — The receipt and inference commitment (2:05–2:35) · [NOW]
 
 **Screen:** the **Decision receipts** table; expand one row — data bought, intent
 (`from → to`, notional), execution + tx, and the receipt hash.
 
-**VO:** "All of it lands in one signed receipt: the data, the thesis, the trade,
-the transaction. New receipts also include an inference proof: input hash,
-output hash, and proof hash. Each receipt commits to the previous one's hash,
+**VO:** "All of it lands in one hash-chained receipt: the data, the thesis, the trade,
+the transaction. New receipts also include an inference commitment: input hash,
+output hash, and commitment hash. Each receipt commits to the previous one's hash,
 so the whole history is a chain — change any past decision and every hash after
 it breaks."
 
-> Open `/inference-proofs` for one beat and show the proof hash matching the
-> latest receipt.
+> Open `/inference-commitments` for one beat and show the commitment hash bound
+> into the latest receipt.
 
 ## Scene 5 — Anyone can verify (2:35–3:05) · [NOW]
 
@@ -95,13 +95,13 @@ log, recomputes every hash from scratch, and prints the head. It matches."
 
 **VO:** "And once a day the latest daily head is written on-chain under the
 agent's ERC-8004 identity. The current head keeps moving each hour; the anchor
-shows the last committed UTC day. So the proof is end-to-end: public log,
-recomputed locally, committed on-chain. A self-custody user could actually audit
+panel shows exactly how many receipts are already covered by the on-chain
+checkpoint and how many are still local-only. A self-custody user could audit
 this agent — and then trust it."
 
 > Show ERC-8004 agent `136384`, the BSC mainnet anchor transaction, and the
 > matching anchored-day head from `/state`. Then open `/signal` and show the
-> ERC-8183-ready signal hash bound to the same receipt head and inference proof.
+> ERC-8183-ready signal hash bound to the same receipt head and inference commitment.
 
 ## Close (3:25–3:30)
 

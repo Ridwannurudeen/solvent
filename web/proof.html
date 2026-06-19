@@ -4,16 +4,16 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Proof · SOLVENT</title>
-<meta name="description" content="Verify SOLVENT's decision log yourself — recompute the hash chain with a standalone script and check the daily on-chain ERC-8004 anchors." />
+<meta name="description" content="Verify SOLVENT's decision log yourself — recompute the local hash chain and check daily on-chain ERC-8004 anchor coverage." />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="SOLVENT" />
 <meta property="og:title" content="SOLVENT · Verify it yourself" />
-<meta property="og:description" content="Recompute the entire decision chain with a 51-line standalone script and check it against the daily on-chain ERC-8004 anchors. No trust required." />
+<meta property="og:description" content="Recompute the decision chain with a standalone script and check which receipts are covered by daily on-chain ERC-8004 anchors." />
 <meta property="og:url" content="https://solvent.gudman.xyz/proof" />
 <meta property="og:image" content="https://solvent.gudman.xyz/og.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="SOLVENT · Verify it yourself" />
-<meta name="twitter:description" content="Recompute the entire decision chain with a 51-line standalone script and check it against the daily on-chain ERC-8004 anchors. No trust required." />
+<meta name="twitter:description" content="Recompute the decision chain with a standalone script and check which receipts are covered by daily on-chain ERC-8004 anchors." />
 <meta name="twitter:image" content="https://solvent.gudman.xyz/og.png" />
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path fill="%23F0B90B" d="M16 3l4 4-4 4-4-4zM16 21l4 4-4 4-4-4zM7 12l4 4-4 4-4-4zM25 12l4 4-4 4-4-4zM16 12l4 4-4 4-4-4z"/></svg>' />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,7 +29,7 @@
 <div class="page">
   <div class="page-head">
     <h1>Proof</h1>
-    <p>You don't have to trust the agent. The log is public, the verifier is standard-library Python, and the chain head is committed on-chain daily. Recompute everything yourself.</p>
+    <p>You don't have to trust the agent. The log is public, the verifier is standard-library Python, and the chain head is committed on-chain daily. Recompute the local chain and inspect anchor coverage yourself.</p>
   </div>
 
   <section class="section">
@@ -66,13 +66,13 @@
             <td>CMC x402 receipt</td>
             <td class="mono dim">BSC mainnet data payment</td>
             <td class="mono">0x282364a9...f89ba744</td>
-            <td><span class="up">$0.03 paid data, chain verified</span></td>
+            <td><span class="up">$0.03 paid data receipt</span></td>
           </tr>
           <tr>
-            <td>Inference proof stream</td>
+            <td>Inference commitment stream</td>
             <td class="mono dim">public API</td>
-            <td><a class="mono" href="/inference-proofs">/inference-proofs</a></td>
-            <td><span class="up">input/output/proof hashes</span></td>
+            <td><a class="mono" href="/inference-commitments">/inference-commitments</a></td>
+            <td><span class="up">input/output/commitment hashes</span></td>
           </tr>
           <tr>
             <td>ERC-8183 signal</td>
@@ -86,11 +86,11 @@
   </section>
 
   <section class="section">
-    <div class="section-head"><h2>Verify it yourself</h2><span class="note">no trust required</span></div>
+    <div class="section-head"><h2>Verify it yourself</h2><span class="note">local chain plus anchor coverage</span></div>
     <div class="verify-grid">
       <div class="card card-pad verify-card">
         <h3><span class="n">1 ·</span> What the agent claims</h3>
-        <p>The receipt log and a live chain check are public JSON. The head hash commits to every decision ever made.</p>
+        <p>The receipt log and local chain check are public JSON. The head hash commits to every receipt in the current local log.</p>
         <pre>curl -s https://solvent.gudman.xyz/verify</pre>
       </div>
       <div class="card card-pad verify-card">
