@@ -8,6 +8,7 @@ Type=oneshot
 User=solvent
 WorkingDirectory=/opt/solvent
 EnvironmentFile=/opt/solvent/solvent.env
+EnvironmentFile=-/etc/solvent/telegram-alerts
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

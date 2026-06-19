@@ -22,6 +22,7 @@ from .preflight import (
 )
 
 DEFAULT_PUBLIC_BASE = "https://solvent.gudman.xyz"
+DEFAULT_ALERT_ENV_FILE = Path("/etc/solvent/telegram-alerts")
 
 Fetcher = Callable[[str], tuple[int, str]]
 
@@ -46,6 +47,25 @@ def _fetch_json(fetcher: Fetcher, url: str) -> tuple[bool, dict | None, str]:
         return True, json.loads(body), "ok"
     except ValueError as exc:
         return False, None, f"invalid JSON: {exc}"
+
+
+def load_alert_env_file(path: Path = DEFAULT_ALERT_ENV_FILE) -> bool:
+    """Load only non-empty Telegram alert vars from the optional secret file."""
+    if not path.exists():
+        return False
+    allowed = {"SOLVENT_TG_BOT_TOKEN", "SOLVENT_TG_CHAT_ID"}
+    loaded = False
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        if key in allowed and value:
+            os.environ[key] = value
+            loaded = True
+    return loaded
 
 
 def _fetch_text(fetcher: Fetcher, url: str) -> tuple[bool, str]:
@@ -327,9 +347,7 @@ def _preflight_checks(report: dict, profile: str) -> list[dict]:
         twak_detail = "twak auth and wallet are available via local setup"
     else:
         twak_detail = (
-            ", ".join(
-                name for name in REQUIRED_LIVE_TWAK_ENV if not twak_env.get(name)
-            )
+            ", ".join(name for name in REQUIRED_LIVE_TWAK_ENV if not twak_env.get(name))
             or "twak auth/balance probe failed"
         )
     checks.append(
@@ -430,6 +448,10 @@ def main() -> int:
 
     if args.env_file:
         load_env_file(args.env_file)
+    load_alert_env_file(
+        Path(os.environ.get("SOLVENT_ALERT_ENV_FILE", str(DEFAULT_ALERT_ENV_FILE)))
+    )
+    if args.env_file:
         default_dir = Path("/opt/solvent/data")
         if args.data_dir == default_dir:
             args.data_dir = Path(os.environ.get("SOLVENT_DATA_DIR", default_dir))

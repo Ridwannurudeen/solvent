@@ -1,9 +1,10 @@
 import json
+import os
 from datetime import datetime, timezone
 
 from solvent.exec.executor import Journal
 from solvent.kernel.allocator import IntentKind, TradeIntent
-from solvent.ops.readiness import readiness
+from solvent.ops.readiness import load_alert_env_file, readiness
 from solvent.receipts.chain import DataPurchase, ReceiptChain
 
 
@@ -184,9 +185,7 @@ def test_live_readiness_requires_twak_credentials(tmp_path, monkeypatch):
 
     assert report["ok"] is False
     assert any(
-        c["name"] == "live_twak_credentials_available"
-        and c["required"]
-        and not c["ok"]
+        c["name"] == "live_twak_credentials_available" and c["required"] and not c["ok"]
         for c in report["checks"]
     )
 
@@ -232,6 +231,32 @@ def test_live_readiness_accepts_twak_file_auth(tmp_path, monkeypatch):
         and "local setup" in c["detail"]
         for c in report["checks"]
     )
+
+
+def test_load_alert_env_file_overrides_blank_alert_vars(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_TG_BOT_TOKEN", "")
+    monkeypatch.setenv("SOLVENT_TG_CHAT_ID", "")
+    monkeypatch.delenv("IGNORED_SECRET", raising=False)
+    path = tmp_path / "telegram-alerts"
+    path.write_text(
+        "\n".join(
+            [
+                "SOLVENT_TG_BOT_TOKEN='new-token'",
+                'SOLVENT_TG_CHAT_ID="new-chat"',
+                "IGNORED_SECRET=not-loaded",
+            ]
+        )
+    )
+
+    assert load_alert_env_file(path) is True
+
+    assert "IGNORED_SECRET" not in os.environ
+    assert os.environ["SOLVENT_TG_BOT_TOKEN"] == "new-token"
+    assert os.environ["SOLVENT_TG_CHAT_ID"] == "new-chat"
+
+
+def test_load_alert_env_file_missing_file_is_noop(tmp_path):
+    assert load_alert_env_file(tmp_path / "missing") is False
 
 
 def test_empty_local_chain_surfaces_explicit_head_check(tmp_path):
