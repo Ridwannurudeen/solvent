@@ -5,8 +5,11 @@
 const $ = (s) => document.querySelector(s);
 const esc = (s) =>
   String(s).replace(
-    /[&<>"]/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
   );
 const short = (h) => (!h ? "—" : h.slice(0, 10) + "…" + h.slice(-6));
 const fmtUsd = (n) =>
@@ -119,8 +122,8 @@ function renderNavStatus(ver) {
         ? ""
         : ` · ${unanchored} receipt${unanchored === 1 ? "" : "s"} unanchored`;
     el.innerHTML = ver.ok
-      ? `<span class="dot ok pulse"></span> local chain verified · ${ver.count} receipts${anchorNote}`
-      : `<span class="dot bad"></span> local chain tampered`;
+      ? `<span class="dot ok pulse"></span> local chain hash-consistent · ${ver.count} receipts${anchorNote}`
+      : `<span class="dot bad"></span> local chain hash broken`;
   }
   const hh = $("#headHash");
   if (hh) hh.textContent = ver.head_hash;
@@ -148,10 +151,14 @@ function renderTeaser(entries, ver, st) {
     st.start_equity_usd || (entries.length ? entries[0].receipt.equity_usd : 0);
   const ret = last && start > 0 ? last.equity_usd / start - 1 : null;
   const cards = [
-    ["Equity", last ? esc(fmtUsd(last.equity_usd)) : "—", ""],
-    ["Return", pct(ret), trendClass(ret)],
+    ["Equity (reported)", last ? esc(fmtUsd(last.equity_usd)) : "—", ""],
+    ["Return (reported)", pct(ret), trendClass(ret)],
     ["Decisions", `${ver.count}`, ""],
-    ["Local chain", ver.ok ? "verified" : "tampered", ver.ok ? "up" : "down"],
+    [
+      "Local chain",
+      ver.ok ? "hash-consistent" : "broken",
+      ver.ok ? "up" : "down",
+    ],
   ];
   el.innerHTML = cards
     .map(
@@ -179,8 +186,11 @@ function renderStats(entries, ver, st) {
     st.start_equity_usd || (entries.length ? entries[0].receipt.equity_usd : 0);
   const ret = last && start > 0 ? last.equity_usd / start - 1 : null;
   const cards = [
-    ["Equity", last ? esc(fmtUsd(last.equity_usd)) : "—"],
-    ["Return", `<span class="${trendClass(ret)}">${pct(ret)}</span>`],
+    ["Equity (reported)", last ? esc(fmtUsd(last.equity_usd)) : "—"],
+    [
+      "Return (reported)",
+      `<span class="${trendClass(ret)}">${pct(ret)}</span>`,
+    ],
     ["DQ headroom", headroom == null ? "—" : `${headroom.toFixed(1)}%`],
     ["Decisions", `${ver.count}`],
     ["Data spend", `$${dataCost.toFixed(2)}`],

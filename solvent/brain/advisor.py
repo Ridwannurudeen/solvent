@@ -115,7 +115,7 @@ def advise(
         regime = _REGIME_FROM_STR[data["regime"]]
         return RegimeAdvice(
             regime=regime,
-            confidence=float(data["confidence"]),
+            confidence=min(1.0, max(0.0, float(data["confidence"]))),
             thesis=str(data["thesis"]),
             ranked_symbols=[str(s) for s in data["ranked_symbols"]],
         )

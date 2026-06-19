@@ -59,6 +59,17 @@ def test_parses_valid_advice():
     )
 
 
+def test_confidence_is_clamped_to_unit_range():
+    client = _Client(
+        _json_resp(
+            '{"regime": "neutral", "confidence": 5.0, '
+            '"thesis": "x", "ranked_symbols": []}'
+        )
+    )
+    advice = advise(SIGNALS, Regime.RISK_ON, client=client)
+    assert advice is not None and advice.confidence == 1.0
+
+
 def test_api_error_returns_none():
     client = _Client(
         raise_exc=anthropic.APIConnectionError(

@@ -63,7 +63,10 @@ def test_advisor_downgrade_suppresses_entry(tmp_path):
     assert summary["regime"] == "risk-off"
 
 
-def test_advisor_thesis_lands_in_receipt(tmp_path):
+def test_advisor_narrative_stays_in_advisor_block_not_headline_thesis(tmp_path):
+    # The advisor downgrades risk-on -> neutral (suppressing entry). Its prose
+    # must NOT become the headline thesis of a kernel-decided cycle; it lives in
+    # signals.advisor.thesis instead. (#19)
     def advisor(signals, regime, position):
         return RegimeAdvice(Regime.NEUTRAL, 0.5, "funding crowded", ["CAKE"])
 
@@ -73,8 +76,10 @@ def test_advisor_thesis_lands_in_receipt(tmp_path):
     rec = json.loads((tmp_path / "receipts.jsonl").read_text().splitlines()[-1])[
         "receipt"
     ]
-    assert rec["thesis"] == "funding crowded"
+    assert rec["thesis"] != "funding crowded"
+    assert rec["thesis"] == "hold (neutral)"
     assert rec["signals"]["regime_deterministic"] == "risk-on"
+    assert rec["signals"]["advisor"]["thesis"] == "funding crowded"
     assert rec["signals"]["advisor"]["regime"] == "neutral"
     assert rec["signals"]["advisor"]["confidence"] == 0.5
 

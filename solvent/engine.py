@@ -374,8 +374,10 @@ def run_cycle(
         },
         inference_proof=inference_proof,
         regime=regime,
-        thesis=(advice.thesis if advice is not None else None)
-        or "; ".join(i.reason for i in intents)
+        # The headline thesis is the deterministic kernel's own reasoning; the
+        # advisor narrative (if any) lives in signals.advisor.thesis so LLM prose
+        # is never shown as the explanation for a kernel-decided trade.
+        thesis="; ".join(i.reason for i in intents)
         or halt_reason
         or store.halt_reason
         or f"hold ({regime})",
