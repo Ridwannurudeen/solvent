@@ -126,6 +126,45 @@ def test_idempotent_across_two_runs(tmp_path):
     assert journal.confirmed_trades_on(str(TODAY)) == 1
 
 
+def test_noop_when_attempt_unresolved(tmp_path):
+    journal = _journal(tmp_path)
+    # The hourly cycle broadcast a qualify whose outcome is still unresolved.
+    journal.mark_attempted("seed", _intent())
+    assert journal.has_unresolved()
+
+    summary = run_deadman(
+        executor=PaperExecutor(journal),
+        journal=journal,
+        cfg=CFG,
+        now=_at(CFG.qual_deadline_hour_utc + 1),
+    )
+    assert summary["action"] == "none"
+    assert "unresolved" in summary["reason"]
+    assert journal.confirmed_trades_on(str(TODAY)) == 0
+
+
+def test_main_fails_loudly_when_lock_held(tmp_path, monkeypatch):
+    import sys
+
+    from solvent.ops import deadman as deadman_mod
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "writer.lock").write_text("{}")  # fresh (non-stale) lock held
+
+    monkeypatch.setattr(deadman_mod.time, "sleep", lambda *_: None)
+    alerts: list[str] = []
+    monkeypatch.setattr(deadman_mod, "alert", lambda msg: alerts.append(msg))
+    monkeypatch.setattr(
+        sys, "argv", ["deadman", "--mode", "paper", "--data-dir", str(data_dir)]
+    )
+
+    rc = deadman_mod.main()
+
+    assert rc == 1  # not a silent exit 0
+    assert alerts and "writer lock" in alerts[0]
+
+
 def test_independent_of_signals():
     """run_deadman's signature takes no source/signals — the path cannot
     depend on market data by construction."""

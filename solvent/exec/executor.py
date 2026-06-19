@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..kernel.allocator import TradeIntent
+from ..kernel.allowlist import is_executable
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +238,17 @@ class TwakExecutor:
 
     def execute(self, intent: TradeIntent, cycle_id: str) -> ExecutionResult:
         key = intent_key(intent, cycle_id)
+        if not (is_executable(intent.from_symbol) and is_executable(intent.to_symbol)):
+            # Pre-broadcast gate: never hand a non-pinned / malformed symbol to
+            # TWAK's resolver, which swaps by symbol and would pick the token.
+            return ExecutionResult(
+                key,
+                False,
+                None,
+                f"non-executable symbol in {intent.from_symbol}->{intent.to_symbol}; "
+                "refusing to broadcast",
+                "failed",
+            )
         prior = self.journal.state_of(key)
         if prior == "CONFIRMED":
             entry = self.journal.latest_entry(key) or {}

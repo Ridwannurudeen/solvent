@@ -180,6 +180,19 @@ class LiveReceiptVerifier:
                     f"{intent.to_symbol} received {observed:.8f} below "
                     f"minimum {min_received:.8f}"
                 )
+        elif intent.expected_price_usd:
+            # Buy of a non-stable token: enforce a minimum units-received from
+            # the expected price, so a sandwich/honeypot returning dust fails
+            # verification instead of recording as a full fill.
+            min_units = (intent.notional_usd / intent.expected_price_usd) * (
+                1.0 - 2.0 * self.slippage_pct / 100.0
+            )
+            observed_units = to_delta if before else to_flow
+            if observed_units + DUST < min_units:
+                raise RuntimeError(
+                    f"{intent.to_symbol} received {observed_units:.8f} units below "
+                    f"minimum {min_units:.8f}"
+                )
 
         return {
             "tx_hash": tx_hash,

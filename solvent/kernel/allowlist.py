@@ -7,9 +7,11 @@ order on 2026-06-10. Trades outside this list do not count.
 The brief publishes SYMBOLS only. Symbols alone are ambiguous on BSC
 (M, U, B, H, Q, NFT, ...), so live trading additionally requires the
 BSC contract address to be pinned in ADDRESSES before a symbol becomes
-tradable. A symbol with no pinned address is allowlist-visible but
-NOT executable — the kernel refuses to size it.
+tradable. A symbol with no pinned (or malformed) address is allowlist-visible
+but NOT executable — the kernel refuses to size it.
 """
+
+import re
 
 # Verbatim from the brief (includes the brief's own duplicates: SLX twice,
 # USDf and USDF as distinct casings). Order preserved.
@@ -251,13 +253,32 @@ ADDRESSES: dict[str, str] = {
 }
 
 
+_VALID_BSC_ADDR = re.compile(r"^0x[0-9a-fA-F]{40}$")
+
+
+def _validate_addresses() -> None:
+    """A malformed pinned address must fail loudly at import, not silently
+    pass `is_executable` and let TWAK resolve/broadcast against a bad pin."""
+    for sym, addr in ADDRESSES.items():
+        if not _VALID_BSC_ADDR.fullmatch(addr):
+            raise ValueError(f"allowlist: malformed BSC address for {sym!r}: {addr!r}")
+
+
+_validate_addresses()
+
+
 def is_allowed(symbol: str) -> bool:
     return symbol in ALLOWED_SYMBOLS
 
 
 def is_executable(symbol: str) -> bool:
-    """Allowed AND has a pinned contract address."""
-    return symbol in ALLOWED_SYMBOLS and bool(ADDRESSES.get(symbol))
+    """Allowed AND has a pinned, format-valid BSC contract address."""
+    addr = ADDRESSES.get(symbol)
+    return (
+        symbol in ALLOWED_SYMBOLS
+        and bool(addr)
+        and bool(_VALID_BSC_ADDR.fullmatch(addr))
+    )
 
 
 def needs_manual_pin(symbol: str) -> bool:

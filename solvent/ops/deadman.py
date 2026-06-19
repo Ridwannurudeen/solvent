@@ -19,6 +19,7 @@ import argparse
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -58,6 +59,14 @@ def run_deadman(
 
     if journal.confirmed_trades_on(day) > 0:
         return {"action": "none", "reason": "already qualified today", "day": day}
+    if journal.has_unresolved():
+        # The hourly cycle may have broadcast a qualify whose receipt has not
+        # resolved yet (ATTEMPTED, not CONFIRMED). Firing now would double-send.
+        return {
+            "action": "none",
+            "reason": "unresolved attempt pending; not double-sending",
+            "day": day,
+        }
     if now.hour < cfg.qual_deadline_hour_utc:
         return {
             "action": "none",
@@ -170,21 +179,35 @@ def main() -> int:
     )
 
     cfg = RiskConfig()
-    try:
-        with SingleWriterLock(args.data_dir / "writer.lock"):
-            journal = Journal(args.data_dir / "journal.jsonl")
-            summary = run_deadman(
-                executor=make_executor(args.mode, journal, cfg),
-                journal=journal,
-                cfg=cfg,
-                receipts=ReceiptChain(args.data_dir / "receipts.jsonl"),
-                pretrade_publisher=build_pretrade_publisher(),
-            )
-    except RuntimeError as exc:
-        if "state writer already active" in str(exc):
-            logger.warning("deadman skipped: %s", exc)
-            return 0
-        raise
+    last_exc: RuntimeError | None = None
+    for attempt in range(6):
+        try:
+            with SingleWriterLock(args.data_dir / "writer.lock"):
+                journal = Journal(args.data_dir / "journal.jsonl")
+                summary = run_deadman(
+                    executor=make_executor(args.mode, journal, cfg),
+                    journal=journal,
+                    cfg=cfg,
+                    receipts=ReceiptChain(args.data_dir / "receipts.jsonl"),
+                    pretrade_publisher=build_pretrade_publisher(),
+                )
+            break
+        except RuntimeError as exc:
+            if "state writer already active" not in str(exc):
+                raise
+            last_exc = exc
+            if attempt < 5:
+                time.sleep(2**attempt)
+    else:
+        # Persistently locked (e.g. a wedged hourly cycle): the daily
+        # qualification may be missed, so fail loudly rather than exit 0.
+        msg = (
+            f"SOLVENT DEADMAN [{args.mode}] could not acquire writer lock; "
+            f"daily qualification may be MISSED: {last_exc}"
+        )
+        logger.error(msg)
+        alert(msg)
+        return 1
     logger.info("deadman: %s", summary)
     if summary["action"] == "qualify":
         ok = summary["ok"]
