@@ -150,6 +150,24 @@ def test_strategy_evidence_endpoint_payload():
     assert out["schema"] == "solvent.strategy-evidence.v1"
     assert out["edge_claim"]["guaranteed"] is False
     assert "benchmarks" in out["scenarios"]["uptrend"]
+    assert "profile_scorecard" in out
+    assert "fee_sensitivity" in out
+
+
+def test_strategy_evidence_reads_policy_profile(tmp_path):
+    (tmp_path / "policy-manifest.json").write_text(
+        json.dumps(
+            {
+                "manifest_hash": "0x" + "11" * 32,
+                "manifest": {"strategy": {"profile": "tournament_60"}},
+            }
+        )
+    )
+
+    out = strategy_evidence(tmp_path)
+
+    assert out["selection"]["anchored_policy_profile"] == "tournament_60"
+    assert isinstance(out["selection"]["anchored_policy_rank"], int)
 
 
 def test_summary_ignores_latest_execution_seal(tmp_path):

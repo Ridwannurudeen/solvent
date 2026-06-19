@@ -69,8 +69,10 @@ The policy verifier is the repo-side Proof-of-Policy check: it recomputes the
 manifest hash, verifies the declared manifest signature and ERC-8004 wallet
 anchor, validates scoped receipt and journal evidence against the mandate, and
 emits a risk passport. The watcher is read-only public monitoring. The strategy
-report compares profiles against declared benchmarks in stress scenarios; it is
-evidence, not a claim of statistically proven or guaranteed alpha.
+report compares profiles against declared benchmarks in stress scenarios, adds
+active-window trade-count checks, fee sensitivity, and a profile scorecard, and
+shows the anchored policy profile's scorecard rank; it is evidence, not a claim
+of statistically proven or guaranteed alpha.
 
 ## On-chain Proof
 
@@ -151,7 +153,8 @@ the deterministic kernel.
 5. TWAK live rehearsal tx on BscScan.
 6. `/inference-commitments` showing input/output/commitment hashes.
 7. `/inference-verification` showing deterministic re-execution checks.
-8. `/strategy-evidence` showing benchmark-relative strategy evidence.
+8. `/strategy-evidence` showing benchmark-relative strategy evidence, profile
+   scorecard, fee sensitivity, and anchored policy profile rank.
 9. `/signal` showing the ERC-8183-ready paid signal payload.
 10. `/policy-compliance` showing the risk passport and green policy checks.
 11. `python verify_receipts.py` matching `/verify`.

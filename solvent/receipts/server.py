@@ -280,8 +280,16 @@ def policy_compliance(data_dir: Path) -> dict:
     return policy_compliance_report(data_dir)
 
 
-def strategy_evidence() -> dict:
-    return strategy_report()
+def strategy_evidence(data_dir: Path | None = None) -> dict:
+    policy_profile = None
+    if data_dir is not None:
+        try:
+            policy_profile = policy_manifest(data_dir)["manifest"]["strategy"][
+                "profile"
+            ]
+        except (KeyError, TypeError, ValueError):
+            policy_profile = None
+    return strategy_report(policy_profile=policy_profile)
 
 
 class ReceiptHandler(BaseHTTPRequestHandler):
@@ -322,7 +330,7 @@ class ReceiptHandler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 self._send({"error": str(exc)}, status=404)
         elif route == "/strategy-evidence":
-            self._send(strategy_evidence())
+            self._send(strategy_evidence(self.data_dir))
         elif route == "/policy":
             try:
                 self._send(policy_manifest(self.data_dir))

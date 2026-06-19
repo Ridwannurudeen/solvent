@@ -46,7 +46,10 @@
   attestation.
 - `/strategy-evidence` compares risk profiles against hold-stables,
   best-buy-and-hold, and equal-weight buy-and-hold benchmarks in declared stress
-  scenarios. It is benchmark-relative evidence, not a guarantee of future PnL.
+  scenarios. It also exposes scenario metadata, active-window trade-count
+  checks, a profile scorecard, fee sensitivity, and the anchored policy
+  profile's scorecard rank. It is benchmark-relative evidence, not a guarantee
+  of future PnL.
 - `/policy-compliance` recomputes the policy manifest hash, verifies the
   declared manifest signature and ERC-8004 wallet anchor, checks receipt-chain
   integrity, checks scoped intent/result policy compliance, verifies executed
