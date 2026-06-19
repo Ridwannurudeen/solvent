@@ -205,6 +205,42 @@ def _public_checks(
         )
     )
 
+    ok, reexec_payload, detail = _fetch_json(fetcher, f"{base}/inference-verification")
+    public["inference_verification"] = reexec_payload
+    checks.append(
+        _check(
+            "public_inference_verification",
+            ok
+            and bool(
+                reexec_payload
+                and reexec_payload.get("schema")
+                == "solvent.inference-verification-log.v1"
+                and reexec_payload.get("ok") is True
+            ),
+            detail if not reexec_payload else f"ok={reexec_payload.get('ok')}",
+        )
+    )
+
+    ok, strategy_payload, detail = _fetch_json(fetcher, f"{base}/strategy-evidence")
+    public["strategy_evidence"] = strategy_payload
+    checks.append(
+        _check(
+            "public_strategy_evidence",
+            ok
+            and bool(
+                strategy_payload
+                and strategy_payload.get("schema") == "solvent.strategy-evidence.v1"
+                and isinstance(strategy_payload.get("scenarios"), dict)
+                and strategy_payload.get("edge_claim", {}).get("guaranteed") is False
+            ),
+            (
+                detail
+                if not strategy_payload
+                else f"guaranteed={strategy_payload.get('edge_claim', {}).get('guaranteed')}"
+            ),
+        )
+    )
+
     ok, compliance_payload, detail = _fetch_json(fetcher, f"{base}/policy-compliance")
     public["policy_compliance"] = compliance_payload
     checks.append(

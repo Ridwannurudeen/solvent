@@ -81,6 +81,23 @@ def _fetcher(head_hash):
             )
         if url.endswith("/inference-commitments"):
             return 200, json.dumps([])
+        if url.endswith("/inference-verification"):
+            return 200, json.dumps(
+                {
+                    "schema": "solvent.inference-verification-log.v1",
+                    "ok": True,
+                    "count": 1,
+                    "verified_count": 1,
+                }
+            )
+        if url.endswith("/strategy-evidence"):
+            return 200, json.dumps(
+                {
+                    "schema": "solvent.strategy-evidence.v1",
+                    "edge_claim": {"guaranteed": False},
+                    "scenarios": {"uptrend": {}},
+                }
+            )
         if url.endswith("/policy-compliance"):
             return 200, json.dumps(
                 {"schema": "solvent.policy-compliance.v1", "ok": True}
@@ -108,6 +125,8 @@ def test_submission_readiness_allows_paper_public_state(tmp_path, monkeypatch):
         c["name"] == "live_data_dir_isolated" and c["required"] is False
         for c in report["checks"]
     )
+    assert any(c["name"] == "public_inference_verification" for c in report["checks"])
+    assert any(c["name"] == "public_strategy_evidence" for c in report["checks"])
     assert "not-printed" not in str(report)
 
 
