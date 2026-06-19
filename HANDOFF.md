@@ -1,11 +1,11 @@
 # Handoff — audit remediation (branch `fix/audit-remediation`, PR #1)
 
-Working handoff for whoever picks this up next. Delete once the three open items
+Working handoff for whoever picks this up next. Delete once the remaining items
 below are closed. Everything in the "Done" section is committed, tested, pushed.
 
 ## State
 - Branch `fix/audit-remediation` → PR #1, base `codex/solvent-private-prep`.
-- 7 commits; `python -m pytest -q` → **244 passed**; `ruff check solvent tests` → clean.
+- 9 commits; `python -m pytest -q` → **245 passed**; `ruff check solvent tests` → clean.
 - A two-pass audit found 21 limitation clusters; all are addressed (FIX with a
   regression test each, or MITIGATE + honest docs for inherent design limits).
 - House rules: no Claude/Anthropic attribution in commits/PRs; never submit
@@ -54,7 +54,7 @@ available through TWAK's swap CLI today. `ADDRESSES` already documents this
 symbol-only ceiling, and `tests/test_executor.py::test_non_executable_symbol_refused_before_broadcast`
 covers the pre-broadcast refusal path.
 
-## Open item 2 — deploy + verify on the VPS
+## Closed item 2 — deployed + verified on the VPS
 `/opt/solvent` is a deployed copy, not a git checkout. Deploy tracked files from
 the local PR branch with `git archive` so the real `solvent.env`, `.twak`,
 `.bnbagent`, `.venv`, `data`, and `data-prod` are not replaced.
@@ -75,9 +75,35 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo -u solvent /opt/solvent/.venv/bin/python -m solvent.ops.readiness --data-dir "$SOLVENT_DATA_DIR" --profile live --env-file /opt/solvent/solvent.env
 sudo -u solvent /opt/solvent/.venv/bin/python /opt/solvent/verify_receipts.py
 ```
-If `solvent.service` logs a read-only-filesystem error, `ReadWritePaths=/opt/solvent`
-in the units must point at the real `SOLVENT_DATA_DIR` (it defaults under
-`/opt/solvent`, so this only bites if the data dir lives elsewhere).
+
+Actual VPS results:
+- `ops/install.sh` initially failed because shell scripts arrived with CRLF.
+  `.gitattributes` now forces LF for shell/systemd/nginx ops files; the
+  redeployed archive verified LF and `bash ops/install.sh` completed.
+- `/opt/solvent/.venv/bin/pip install -e /opt/solvent` completed.
+- `systemctl show ... -p UnsetEnvironment` shows signing/TWAK secrets stripped
+  from `solvent-web`, `solvent-watcher`, and `solvent-watchdog`.
+- After restarting `solvent-web.service`, the receipt-server process had `0`
+  signing/TWAK secret env vars.
+- `nginx -t` passed with only pre-existing `protocol options redefined` warnings.
+- `solvent.service` initially failed because the stale secret env file still
+  says `SOLVENT_BSC_NETWORK=bsc-testnet`; live drop-ins now launch the trading
+  and deadman processes through `/usr/bin/env ... SOLVENT_BSC_NETWORK=bsc-mainnet`
+  so the env-file value cannot override the live mainnet settings.
+- A manual live cycle then succeeded: receipt seq `36`, head
+  `0xd9c8ba5d2144ebf2f976808562d7e3114bf62e46fe6083eac1501ef15c93aec6`,
+  pre-trade anchor tx
+  `0xed14282e5906d5c34db90b473d675246785bb2a1885c66f138a40eee730cbe6e`,
+  stable qualification swap tx
+  `0xab9457f8bc20f00a17691c7b9722f3fa86d596689098cadc32641083240be429`,
+  settlement verified, journal unresolved count `0`.
+- `verify_receipts.py` returned `OK - 37 receipts, chain intact` with the same
+  head hash as `/verify`.
+
+Remaining readiness blocker: `alerts_configured` is still false because
+`SOLVENT_TG_BOT_TOKEN` / `SOLVENT_TG_CHAT_ID` are not configured. TWAK env vars
+are no longer a hard blocker when `twak auth status` and wallet balance probes
+pass through the local TWAK auth/keychain setup.
 
 ## Open item 3 — decision (not code): #1 anchoring window
 Mitigated + documented only. To tighten the ≤24h un-anchored rewrite window,

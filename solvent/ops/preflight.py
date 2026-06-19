@@ -30,8 +30,8 @@ REQUIRED_LIVE_ENV = (
     "SOLVENT_TRADE_NETWORK",
     "SOLVENT_TWAK_CHAIN",
 )
-# The live execution path signs through the TWAK CLI; without these, the trade
-# path cannot actually broadcast, so live readiness must require them too.
+# The live execution path signs through the TWAK CLI. These env vars are one
+# valid credential path; TWAK's local auth file + keychain wallet is another.
 REQUIRED_LIVE_TWAK_ENV = (
     "TWAK_ACCESS_ID",
     "TWAK_HMAC_SECRET",

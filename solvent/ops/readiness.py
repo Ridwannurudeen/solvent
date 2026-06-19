@@ -317,12 +317,26 @@ def _preflight_checks(report: dict, profile: str) -> list[dict]:
     )
     twak_env = report["env"].get("required_live_twak", {})
     twak_env_ok = all(twak_env.get(name) for name in REQUIRED_LIVE_TWAK_ENV)
+    twak = report.get("twak")
+    twak_auth_ok = bool((twak or {}).get("auth_status", {}).get("ok"))
+    twak_balance_ok = bool((twak or {}).get("wallet_balance", {}).get("ok"))
+    twak_ready = twak_env_ok or (twak_auth_ok and twak_balance_ok)
+    if twak_env_ok:
+        twak_detail = "all twak signing creds present"
+    elif twak_auth_ok and twak_balance_ok:
+        twak_detail = "twak auth and wallet are available via local setup"
+    else:
+        twak_detail = (
+            ", ".join(
+                name for name in REQUIRED_LIVE_TWAK_ENV if not twak_env.get(name)
+            )
+            or "twak auth/balance probe failed"
+        )
     checks.append(
         _check(
-            "live_twak_env_present",
-            twak_env_ok,
-            ", ".join(name for name in REQUIRED_LIVE_TWAK_ENV if not twak_env.get(name))
-            or "all twak signing creds present",
+            "live_twak_credentials_available",
+            twak_ready,
+            twak_detail,
             required=profile == "live",
         )
     )
@@ -339,7 +353,6 @@ def _preflight_checks(report: dict, profile: str) -> list[dict]:
             required=profile == "live",
         )
     )
-    twak = report.get("twak")
     if twak is not None:
         auth = twak.get("auth_status") or {}
         checks.append(

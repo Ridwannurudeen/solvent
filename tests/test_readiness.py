@@ -166,15 +166,17 @@ def test_readiness_fails_on_public_head_mismatch(tmp_path, monkeypatch):
     )
 
 
-def test_live_readiness_requires_twak_signing_env(tmp_path, monkeypatch):
-    # Full SOLVENT_* live env but NO twak signing creds: the live trade path
-    # cannot broadcast, so live readiness must fail. (#15)
+def test_live_readiness_requires_twak_credentials(tmp_path, monkeypatch):
+    # Full SOLVENT_* live env but neither explicit TWAK env nor working local
+    # TWAK setup: the live trade path cannot broadcast, so readiness fails.
     data_dir, head_hash = _data_dir(tmp_path, paper=False)
     monkeypatch.setenv("SOLVENT_PRIVATE_KEY", "x")
     monkeypatch.setenv("SOLVENT_WALLET_PASSWORD", "x")
     monkeypatch.setenv("SOLVENT_WALLET_ADDRESS", "0x" + "12" * 20)
     monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
     monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+    monkeypatch.setenv("SOLVENT_TG_BOT_TOKEN", "x")
+    monkeypatch.setenv("SOLVENT_TG_CHAT_ID", "x")
     for name in ("TWAK_ACCESS_ID", "TWAK_HMAC_SECRET", "TWAK_WALLET_PASSWORD"):
         monkeypatch.delenv(name, raising=False)
 
@@ -182,7 +184,52 @@ def test_live_readiness_requires_twak_signing_env(tmp_path, monkeypatch):
 
     assert report["ok"] is False
     assert any(
-        c["name"] == "live_twak_env_present" and c["required"] and not c["ok"]
+        c["name"] == "live_twak_credentials_available"
+        and c["required"]
+        and not c["ok"]
+        for c in report["checks"]
+    )
+
+
+def test_live_readiness_accepts_twak_file_auth(tmp_path, monkeypatch):
+    data_dir, head_hash = _data_dir(tmp_path, paper=False)
+    monkeypatch.setenv("SOLVENT_TG_BOT_TOKEN", "x")
+    monkeypatch.setenv("SOLVENT_TG_CHAT_ID", "x")
+
+    def fake_preflight(_data_dir, include_twak=True):
+        assert include_twak is True
+        return {
+            "env": {
+                "required_live": {
+                    "SOLVENT_PRIVATE_KEY": True,
+                    "SOLVENT_WALLET_PASSWORD": True,
+                    "SOLVENT_WALLET_ADDRESS": True,
+                    "SOLVENT_TRADE_NETWORK": True,
+                    "SOLVENT_TWAK_CHAIN": True,
+                },
+                "required_live_twak": {
+                    "TWAK_ACCESS_ID": False,
+                    "TWAK_HMAC_SECRET": False,
+                    "TWAK_WALLET_PASSWORD": False,
+                },
+            },
+            "paper_data_in_dir": False,
+            "journal_has_unresolved": False,
+            "twak": {
+                "auth_status": {"ok": True},
+                "wallet_balance": {"ok": True, "result": {"totalUsd": 1.0}},
+            },
+        }
+
+    monkeypatch.setattr("solvent.ops.readiness.preflight", fake_preflight)
+
+    report = readiness(data_dir, profile="live", fetcher=_fetcher(head_hash))
+
+    assert report["ok"] is True
+    assert any(
+        c["name"] == "live_twak_credentials_available"
+        and c["ok"]
+        and "local setup" in c["detail"]
         for c in report["checks"]
     )
 
