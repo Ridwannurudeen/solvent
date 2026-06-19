@@ -14,7 +14,12 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from ..receipts.chain import GENESIS_HASH, verify_chain
-from .preflight import REQUIRED_LIVE_ENV, load_env_file, preflight
+from .preflight import (
+    REQUIRED_LIVE_ENV,
+    REQUIRED_LIVE_TWAK_ENV,
+    load_env_file,
+    preflight,
+)
 
 DEFAULT_PUBLIC_BASE = "https://solvent.gudman.xyz"
 
@@ -90,14 +95,27 @@ def _public_checks(
             detail if not verify_payload else f"{verify_payload.get('count')} receipts",
         )
     )
-    if ok and verify_payload and local["count"] > 0:
-        checks.append(
-            _check(
-                "public_head_matches_local",
-                verify_payload.get("head_hash") == local["head_hash"],
-                f"public={verify_payload.get('head_hash')} local={local['head_hash']}",
+    if ok and verify_payload:
+        if local["count"] > 0:
+            checks.append(
+                _check(
+                    "public_head_matches_local",
+                    verify_payload.get("head_hash") == local["head_hash"],
+                    f"public={verify_payload.get('head_hash')} "
+                    f"local={local['head_hash']}",
+                )
             )
-        )
+        else:
+            # No local chain to compare — surface it explicitly instead of
+            # silently omitting the check (which read as a pass).
+            checks.append(
+                _check(
+                    "public_head_matches_local",
+                    True,
+                    "no local chain to compare",
+                    required=False,
+                )
+            )
 
     ok, state_payload, detail = _fetch_json(fetcher, f"{base}/state")
     public["state"] = state_payload
@@ -297,6 +315,50 @@ def _preflight_checks(report: dict, profile: str) -> list[dict]:
             required=profile == "live",
         )
     )
+    twak_env = report["env"].get("required_live_twak", {})
+    twak_env_ok = all(twak_env.get(name) for name in REQUIRED_LIVE_TWAK_ENV)
+    checks.append(
+        _check(
+            "live_twak_env_present",
+            twak_env_ok,
+            ", ".join(name for name in REQUIRED_LIVE_TWAK_ENV if not twak_env.get(name))
+            or "all twak signing creds present",
+            required=profile == "live",
+        )
+    )
+    alerts_ok = bool(
+        os.environ.get("SOLVENT_TG_BOT_TOKEN") and os.environ.get("SOLVENT_TG_CHAT_ID")
+    )
+    checks.append(
+        _check(
+            "alerts_configured",
+            alerts_ok,
+            "telegram alert env present"
+            if alerts_ok
+            else "SOLVENT_TG_BOT_TOKEN / SOLVENT_TG_CHAT_ID missing",
+            required=profile == "live",
+        )
+    )
+    twak = report.get("twak")
+    if twak is not None:
+        auth = twak.get("auth_status") or {}
+        checks.append(
+            _check(
+                "live_twak_auth",
+                bool(auth.get("ok")),
+                f"auth ok={auth.get('ok')}",
+                required=profile == "live",
+            )
+        )
+        balance = twak.get("wallet_balance") or {}
+        checks.append(
+            _check(
+                "live_wallet_balance_readable",
+                bool(balance.get("ok")) and balance.get("result") is not None,
+                f"balance ok={balance.get('ok')}",
+                required=profile == "live",
+            )
+        )
     return checks
 
 
@@ -310,7 +372,9 @@ def readiness(
     fetcher: Fetcher = _urlopen_fetch,
 ) -> dict:
     local, checks = _local_chain(data_dir)
-    report = preflight(data_dir, include_twak=include_twak)
+    # Live readiness must actually probe the TWAK trade path (auth + balance),
+    # not just env presence; the read-only checks never broadcast.
+    report = preflight(data_dir, include_twak=include_twak or profile == "live")
     public, public_checks = _public_checks(
         public_base, local, fetcher, skip_public=skip_public
     )

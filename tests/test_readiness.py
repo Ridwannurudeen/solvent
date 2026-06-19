@@ -166,6 +166,42 @@ def test_readiness_fails_on_public_head_mismatch(tmp_path, monkeypatch):
     )
 
 
+def test_live_readiness_requires_twak_signing_env(tmp_path, monkeypatch):
+    # Full SOLVENT_* live env but NO twak signing creds: the live trade path
+    # cannot broadcast, so live readiness must fail. (#15)
+    data_dir, head_hash = _data_dir(tmp_path, paper=False)
+    monkeypatch.setenv("SOLVENT_PRIVATE_KEY", "x")
+    monkeypatch.setenv("SOLVENT_WALLET_PASSWORD", "x")
+    monkeypatch.setenv("SOLVENT_WALLET_ADDRESS", "0x" + "12" * 20)
+    monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+    for name in ("TWAK_ACCESS_ID", "TWAK_HMAC_SECRET", "TWAK_WALLET_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+
+    report = readiness(data_dir, profile="live", fetcher=_fetcher(head_hash))
+
+    assert report["ok"] is False
+    assert any(
+        c["name"] == "live_twak_env_present" and c["required"] and not c["ok"]
+        for c in report["checks"]
+    )
+
+
+def test_empty_local_chain_surfaces_explicit_head_check(tmp_path):
+    # No local receipts: the head-vs-local check must appear explicitly (as a
+    # non-required note), not be silently omitted and read as a pass. (#15)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    report = readiness(
+        data_dir, profile="submission", fetcher=_fetcher("0x" + "00" * 32)
+    )
+
+    head = [c for c in report["checks"] if c["name"] == "public_head_matches_local"]
+    assert head and head[0]["required"] is False
+    assert "no local chain" in head[0]["detail"]
+
+
 def test_readiness_fails_on_unresolved_journal(tmp_path, monkeypatch):
     data_dir, head_hash = _data_dir(tmp_path, paper=False)
     Journal(data_dir / "journal.jsonl").mark_attempted("pending", _intent())
