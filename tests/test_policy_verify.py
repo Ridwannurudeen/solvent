@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from eth_account import Account
 
@@ -164,3 +164,20 @@ def test_policy_compliance_fails_missing_pretrade_anchor(tmp_path):
         check["name"].endswith("_pretrade_anchor_present") and check["ok"] is False
         for check in report["checks"]
     )
+
+
+def test_policy_compliance_ignores_pre_manifest_journal_rows(tmp_path):
+    wallet = Account.create()
+    _seed_policy(tmp_path, wallet)
+    _seed_receipts(tmp_path)
+    Journal(tmp_path / "journal.jsonl").mark_result(
+        "old-rehearsal",
+        True,
+        "0x" + "66" * 32,
+        "pre-policy rehearsal",
+        ts=NOW - timedelta(days=1),
+    )
+
+    report = policy_compliance_report(tmp_path, now=NOW)
+
+    assert report["ok"] is True

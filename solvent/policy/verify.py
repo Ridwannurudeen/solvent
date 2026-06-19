@@ -332,6 +332,9 @@ def policy_compliance_report(
             entry.get("tx_hash", "")
         ).startswith("paper-"):
             continue
+        entry_ts = _parse_ts(entry.get("ts"))
+        if scope_start is not None and entry_ts is not None and entry_ts < scope_start:
+            continue
         _check(
             checks,
             f"journal_{entry.get('key')}_confirmed_has_verification",
