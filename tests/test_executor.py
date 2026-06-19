@@ -247,6 +247,26 @@ def test_nonzero_exit_marks_failed_not_confirmed(tmp_path, monkeypatch):
     assert journal.has_unresolved() is True
 
 
+def test_pre_broadcast_wallet_config_error_marks_failed(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        exec_mod.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(
+            returncode=1,
+            stdout='{"error":"No wallet found. Run `twak wallet create` first."}',
+            stderr="",
+        ),
+    )
+    ex, journal = _twak(tmp_path)
+
+    result = ex.execute(_intent(), CYCLE)
+
+    assert result.ok is False
+    assert result.outcome == "failed"
+    assert journal.state_of(result.intent_key) == "FAILED"
+    assert journal.has_unresolved() is False
+
+
 def test_ok_output_without_json_is_parsed_as_tx_hash(tmp_path, monkeypatch):
     tx = "0x" + "bb" * 32
 

@@ -61,6 +61,20 @@ def _extract_tx_hash(output: str) -> str | None:
     return match.group(0) if match else None
 
 
+def _pre_broadcast_failure(output: str) -> bool:
+    lowered = output.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "no api credentials found",
+            "no wallet found",
+            "wallet_not_found",
+            "password_missing",
+            "wallet authentication failed",
+        )
+    )
+
+
 def intent_key(intent: TradeIntent, cycle_id: str) -> str:
     """Stable identity for an intent within a cycle."""
     return (
@@ -299,6 +313,9 @@ class TwakExecutor:
         tx_hash = _extract_tx_hash(out)
         ok = proc.returncode == 0 and tx_hash is not None
         if not ok:
+            if tx_hash is None and _pre_broadcast_failure(out):
+                self.journal.mark_result(key, False, None, out)
+                return ExecutionResult(key, False, None, out[:200], "failed")
             logger.error("twak attempt outcome UNKNOWN - halting further sends")
             return ExecutionResult(key, False, tx_hash, out[:200], "unresolved")
         verification = None
