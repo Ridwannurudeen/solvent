@@ -53,6 +53,8 @@ def public_attestation(
         ("policy", "/policy"),
         ("policy_compliance", "/policy-compliance"),
         ("signal", "/signal"),
+        ("inference_verification", "/inference-verification"),
+        ("strategy_evidence", "/strategy-evidence"),
     ):
         payload, detail = _fetch_json(fetcher, f"{base}{path}")
         fetched[name] = payload
@@ -64,6 +66,8 @@ def public_attestation(
     compliance = fetched.get("policy_compliance") or {}
     signal = fetched.get("signal") or {}
     policy_payload = fetched.get("policy") or {}
+    inference_verification = fetched.get("inference_verification") or {}
+    strategy_evidence = fetched.get("strategy_evidence") or {}
     coverage = verify.get("anchor_coverage") or state.get("anchor_coverage") or {}
     body = {
         "schema": "solvent.public-attestation.v1",
@@ -76,6 +80,11 @@ def public_attestation(
             "signal_hash_present": bool(signal.get("signal_hash")),
             "anchor_matches_local_log": coverage.get("anchor_matches_local_log")
             is True,
+            "inference_reexecution_ok": inference_verification.get("ok") is True,
+            "strategy_claims_no_guarantee": strategy_evidence.get("edge_claim", {}).get(
+                "guaranteed"
+            )
+            is False,
         },
         "evidence": {
             "receipt_count": verify.get("count"),
@@ -86,6 +95,10 @@ def public_attestation(
             or policy_payload.get("manifest_hash"),
             "unanchored_count": coverage.get("unanchored_count"),
             "signal_hash": signal.get("signal_hash"),
+            "inference_verified_count": inference_verification.get("verified_count"),
+            "strategy_scenarios": sorted(
+                (strategy_evidence.get("scenarios") or {}).keys()
+            ),
         },
         "errors": errors,
     }

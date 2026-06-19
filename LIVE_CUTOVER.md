@@ -86,6 +86,7 @@ hourly timer:
 
 ```bash
 sudo systemctl enable --now solvent.timer
+sudo systemctl enable --now solvent-watcher.timer
 systemctl list-timers 'solvent*'
 ```
 

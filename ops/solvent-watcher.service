@@ -1,0 +1,11 @@
+[Unit]
+Description=SOLVENT public watcher - archive proof attestations
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=solvent
+WorkingDirectory=/opt/solvent
+EnvironmentFile=/opt/solvent/solvent.env
+ExecStart=/opt/solvent/.venv/bin/python -m solvent.ops.watcher --public-base https://solvent.gudman.xyz --out ${SOLVENT_DATA_DIR}/watcher-attestations.jsonl

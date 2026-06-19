@@ -34,6 +34,22 @@ def _fetcher(url):
         return 200, json.dumps({"schema": "solvent.policy-compliance.v1", "ok": True})
     if url.endswith("/signal"):
         return 200, json.dumps({"signal_hash": "0x" + "33" * 32})
+    if url.endswith("/inference-verification"):
+        return 200, json.dumps(
+            {
+                "schema": "solvent.inference-verification-log.v1",
+                "ok": True,
+                "verified_count": 7,
+            }
+        )
+    if url.endswith("/strategy-evidence"):
+        return 200, json.dumps(
+            {
+                "schema": "solvent.strategy-evidence.v1",
+                "edge_claim": {"guaranteed": False},
+                "scenarios": {"uptrend": {}, "crash": {}},
+            }
+        )
     raise AssertionError(url)
 
 
@@ -44,6 +60,10 @@ def test_public_attestation_hash_binds_observed_evidence():
 
     assert attestation["ok"] is True
     assert attestation["evidence"]["receipt_count"] == 3
+    assert attestation["checks"]["inference_reexecution_ok"] is True
+    assert attestation["checks"]["strategy_claims_no_guarantee"] is True
+    assert attestation["evidence"]["inference_verified_count"] == 7
+    assert attestation["evidence"]["strategy_scenarios"] == ["crash", "uptrend"]
     assert attestation["attestation_hash"].startswith("0x")
 
 

@@ -9,6 +9,7 @@ UNITS=(
   solvent.service solvent.timer solvent-scan.timer
   solvent-deadman.service solvent-deadman.timer
   solvent-watchdog.service solvent-watchdog.timer
+  solvent-watcher.service solvent-watcher.timer
   solvent-web.service
   solvent-erc8183.service
   solvent-anchor.service solvent-anchor.timer
@@ -40,7 +41,7 @@ for u in "${UNITS[@]}"; do
 done
 
 systemctl daemon-reload
-systemctl enable --now solvent-web.service solvent.timer solvent-deadman.timer solvent-watchdog.timer
+systemctl enable --now solvent-web.service solvent.timer solvent-deadman.timer solvent-watchdog.timer solvent-watcher.timer
 if [[ "${SOLVENT_ERC8183_ENABLED:-0}" == "1" ]]; then
   systemctl enable --now solvent-erc8183.service
 else
