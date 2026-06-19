@@ -16,10 +16,12 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from ..brain.proof import verify_inference_proof
 from ..commerce.signal import build_signal_payload
 from ..kernel.rules import RiskConfig
 from ..ops.watchdog import heartbeat_age
 from ..policy.verify import policy_compliance_report
+from ..research.report import strategy_report
 from .chain import verify_chain
 
 logger = logging.getLogger(__name__)
@@ -243,6 +245,27 @@ def inference_commitments(path: Path) -> list[dict]:
     return inference_proofs(path)
 
 
+def inference_verification(path: Path) -> dict:
+    reports = []
+    for item in inference_proofs(path):
+        reports.append(
+            {
+                "seq": item["seq"],
+                "phase": item["phase"],
+                "cycle_id": item["cycle_id"],
+                "receipt_hash": item["receipt_hash"],
+                "verification": verify_inference_proof(item["proof"]),
+            }
+        )
+    return {
+        "schema": "solvent.inference-verification-log.v1",
+        "ok": all(item["verification"]["ok"] for item in reports),
+        "count": len(reports),
+        "verified_count": sum(1 for item in reports if item["verification"]["ok"]),
+        "items": reports,
+    }
+
+
 def policy_manifest(data_dir: Path) -> dict:
     path = data_dir / "policy-manifest.json"
     if not path.exists():
@@ -255,6 +278,10 @@ def policy_manifest(data_dir: Path) -> dict:
 
 def policy_compliance(data_dir: Path) -> dict:
     return policy_compliance_report(data_dir)
+
+
+def strategy_evidence() -> dict:
+    return strategy_report()
 
 
 class ReceiptHandler(BaseHTTPRequestHandler):
@@ -287,11 +314,15 @@ class ReceiptHandler(BaseHTTPRequestHandler):
             self._send(inference_proofs(self.receipts_path))
         elif route == "/inference-commitments":
             self._send(inference_commitments(self.receipts_path))
+        elif route == "/inference-verification":
+            self._send(inference_verification(self.receipts_path))
         elif route == "/signal":
             try:
                 self._send(build_signal_payload(self.data_dir))
             except ValueError as exc:
                 self._send({"error": str(exc)}, status=404)
+        elif route == "/strategy-evidence":
+            self._send(strategy_evidence())
         elif route == "/policy":
             try:
                 self._send(policy_manifest(self.data_dir))

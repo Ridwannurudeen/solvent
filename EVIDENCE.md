@@ -11,6 +11,8 @@
 - Passport alias: https://solvent.gudman.xyz/passport
 - ERC-8183 signal payload: https://solvent.gudman.xyz/signal
 - Inference commitments: https://solvent.gudman.xyz/inference-commitments
+- Inference re-execution verification: https://solvent.gudman.xyz/inference-verification
+- Strategy evidence report: https://solvent.gudman.xyz/strategy-evidence
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
 - Evidence page: https://solvent.gudman.xyz/proof
 - Public repo: https://github.com/Ridwannurudeen/solvent
@@ -38,6 +40,13 @@
 - CMC x402 response bodies are hash-committed in `data_purchases`, and live
   CMC prices are cross-checked against Binance public REST.
 - New receipts include hash-bound inference commitment packets. The public `/signal` payload binds the latest regime signal to the receipt hash, chain head, latest anchor, and inference commitment hash.
+- `/inference-verification` recomputes commitment hashes and re-runs the
+  deterministic regime classifier from the committed signal bytes. It is
+  deterministic re-execution evidence, not TEE, zk, or external model runtime
+  attestation.
+- `/strategy-evidence` compares risk profiles against hold-stables,
+  best-buy-and-hold, and equal-weight buy-and-hold benchmarks in declared stress
+  scenarios. It is benchmark-relative evidence, not a guarantee of future PnL.
 - `/policy-compliance` recomputes the policy manifest hash, verifies the
   declared manifest signature and ERC-8004 wallet anchor, checks receipt-chain
   integrity, checks scoped intent/result policy compliance, verifies executed
@@ -48,6 +57,9 @@
 
 - The public dashboard is no longer a paper-mode dashboard; it reads production live-mode rehearsal state from the funded BSC wallet.
 - Do not present pre-June-22 rehearsal PnL as scored-week leaderboard PnL.
+- Do not claim TEE/zk proof-of-inference or guaranteed trading edge; use
+  `/inference-verification` and `/strategy-evidence` as honest evidence
+  surfaces.
 - The production directory is isolated at `/opt/solvent/data-prod`; do not mix it with old paper data.
 - Unresolved TWAK attempts are resolved only through append-only journal
   recovery (`solvent.ops.exec_recovery`) after manual chain review.

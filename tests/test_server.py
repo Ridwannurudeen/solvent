@@ -6,10 +6,12 @@ from solvent.receipts.server import (
     anchor_coverage,
     inference_commitments,
     inference_proofs,
+    inference_verification,
     load_entries,
     policy_compliance,
     policy_manifest,
     state,
+    strategy_evidence,
     summary,
     verify,
 )
@@ -100,6 +102,54 @@ def test_inference_commitments_alias_matches_legacy_proofs(tmp_path):
     )
 
     assert inference_commitments(p) == inference_proofs(p)
+
+
+def test_inference_verification_reexecutes_proof_receipts(tmp_path):
+    from solvent.brain.proof import build_inference_proof
+    from solvent.kernel.allocator import Regime
+    from solvent.kernel.state import MarketSignals
+
+    p = tmp_path / "receipts.jsonl"
+    chain = ReceiptChain(p)
+    proof = build_inference_proof(
+        cycle_id="20260624T12",
+        signals=MarketSignals(
+            fear_greed=62,
+            btc_funding_rate=0.0001,
+            momentum={"CAKE": 2.0},
+            degraded=False,
+        ),
+        deterministic_regime=Regime.RISK_ON,
+        effective_regime=Regime.RISK_ON,
+        active_risk_profile="safety",
+        position_symbol=None,
+        advice=None,
+    )
+    chain.append(
+        ts="2026-06-24T12:00:00+00:00",
+        phase="cycle_summary",
+        cycle_id="20260624T12",
+        inference_proof=proof,
+        regime="risk-on",
+    )
+
+    out = inference_verification(p)
+
+    assert out["schema"] == "solvent.inference-verification-log.v1"
+    assert out["ok"] is True
+    assert out["verified_count"] == 1
+    assert (
+        out["items"][0]["verification"]["recomputed"]["deterministic_regime"]
+        == "risk-on"
+    )
+
+
+def test_strategy_evidence_endpoint_payload():
+    out = strategy_evidence()
+
+    assert out["schema"] == "solvent.strategy-evidence.v1"
+    assert out["edge_claim"]["guaranteed"] is False
+    assert "benchmarks" in out["scenarios"]["uptrend"]
 
 
 def test_summary_ignores_latest_execution_seal(tmp_path):

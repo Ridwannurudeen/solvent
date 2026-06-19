@@ -1,6 +1,10 @@
 from datetime import datetime, timezone
 
-from solvent.brain.proof import build_inference_proof, sha256_json
+from solvent.brain.proof import (
+    build_inference_proof,
+    sha256_json,
+    verify_inference_proof,
+)
 from solvent.kernel.allocator import Regime
 from solvent.kernel.state import MarketSignals
 
@@ -67,6 +71,47 @@ def test_inference_proof_changes_when_inputs_change():
 
     assert base["input_hash"] != changed["input_hash"]
     assert base["proof_hash"] != changed["proof_hash"]
+
+
+def test_inference_proof_reexecutes_deterministic_kernel():
+    proof = build_inference_proof(
+        cycle_id="20260624T12",
+        signals=_signals(),
+        deterministic_regime=Regime.RISK_ON,
+        effective_regime=Regime.RISK_ON,
+        active_risk_profile="safety",
+        position_symbol=None,
+        advice=None,
+    )
+
+    report = verify_inference_proof(proof)
+
+    assert report["schema"] == "solvent.inference-reexecution.v1"
+    assert report["ok"] is True
+    assert report["attestation_type"] == "deterministic_reexecution"
+    assert report["model_runtime_attested"] is False
+    assert report["recomputed"]["deterministic_regime"] == "risk-on"
+
+
+def test_inference_reexecution_catches_regime_tamper():
+    proof = build_inference_proof(
+        cycle_id="20260624T12",
+        signals=_signals(),
+        deterministic_regime=Regime.RISK_ON,
+        effective_regime=Regime.RISK_ON,
+        active_risk_profile="safety",
+        position_symbol=None,
+        advice=None,
+    )
+    proof["input"] = {**proof["input"], "deterministic_regime": "risk-off"}
+
+    report = verify_inference_proof(proof)
+
+    assert report["ok"] is False
+    assert any(
+        check["name"] == "deterministic_regime_reexecutes" and check["ok"] is False
+        for check in report["checks"]
+    )
 
 
 def test_engine_receipt_contains_inference_proof(tmp_path):

@@ -40,6 +40,8 @@ is anchored on-chain under ERC-8004 agent `136384`.
 - Passport alias: https://solvent.gudman.xyz/passport
 - ERC-8183 signal payload: https://solvent.gudman.xyz/signal
 - Inference commitments: https://solvent.gudman.xyz/inference-commitments
+- Inference re-execution verification: https://solvent.gudman.xyz/inference-verification
+- Strategy evidence report: https://solvent.gudman.xyz/strategy-evidence
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
 - Evidence page: https://solvent.gudman.xyz/proof
 
@@ -67,7 +69,8 @@ The policy verifier is the repo-side Proof-of-Policy check: it recomputes the
 manifest hash, verifies the declared manifest signature and ERC-8004 wallet
 anchor, validates scoped receipt and journal evidence against the mandate, and
 emits a risk passport. The watcher is read-only public monitoring. The strategy
-report is stress evidence, not a claim of statistically proven alpha.
+report compares profiles against declared benchmarks in stress scenarios; it is
+evidence, not a claim of statistically proven or guaranteed alpha.
 
 ## On-chain Proof
 
@@ -119,7 +122,10 @@ drawdown gate:
   post-trade balance deltas match the intent.
 - New receipts include inference commitment packets that hash-bind the signal
   input, effective regime output, and model/kernel ID into the receipt chain.
-  They are commitments, not TEE or zk proofs that a model executed.
+  They are commitments, not TEE or zk proofs that a model executed. The public
+  `/inference-verification` endpoint re-runs the deterministic regime classifier
+  from the committed signal bytes and verifies the effective-regime
+  reconciliation for deterministic cycles.
 
 The optional advisor can only de-risk. It cannot force a larger trade or bypass
 the deterministic kernel.
@@ -144,17 +150,22 @@ the deterministic kernel.
 4. CMC x402 receipt or live proof showing non-zero data cost.
 5. TWAK live rehearsal tx on BscScan.
 6. `/inference-commitments` showing input/output/commitment hashes.
-7. `/signal` showing the ERC-8183-ready paid signal payload.
-8. `/policy-compliance` showing the risk passport and green policy checks.
-9. `python verify_receipts.py` matching `/verify`.
-10. ERC-8004 anchor in `/state` and BscScan.
-11. Strategy/risk constitution in `kernel/rules.py` and signed, anchored `/policy` manifest.
+7. `/inference-verification` showing deterministic re-execution checks.
+8. `/strategy-evidence` showing benchmark-relative strategy evidence.
+9. `/signal` showing the ERC-8183-ready paid signal payload.
+10. `/policy-compliance` showing the risk passport and green policy checks.
+11. `python verify_receipts.py` matching `/verify`.
+12. ERC-8004 anchor in `/state` and BscScan.
+13. Strategy/risk constitution in `kernel/rules.py` and signed, anchored `/policy` manifest.
 
 ## Do Not Claim
 
 - Do not present paper-mode PnL as scored-week live PnL.
 - Do not claim every individual receipt is wallet-signed; the receipt log is hash-chained and covered by periodic wallet-signed on-chain checkpoints.
 - Do not call inference commitments TEE, zk, or runtime proofs.
+- Do not claim guaranteed alpha or guaranteed trading edge; show
+  `/strategy-evidence` as benchmark-relative evidence only.
 - Do not claim pre-June-22 live rehearsal PnL is scored-week leaderboard PnL.
 - Do not claim TEE/zk proof-of-inference; the proof layer is hash commitments,
-  wallet-signed checkpoints, and settlement verification.
+  deterministic re-execution checks, wallet-signed checkpoints, and settlement
+  verification.

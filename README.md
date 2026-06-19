@@ -6,7 +6,7 @@ An autonomous BNB Smart Chain trading agent whose distinguishing feature is **ho
 
 **Live BSC mainnet agent:** https://solvent.gudman.xyz — live wallet holdings, equity vs BNB buy-and-hold, current barbell allocation, liveness heartbeat, local chain verification, anchor coverage, mainnet ERC-8004 anchors, and the full receipt stream.
 
-Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state) · [`/policy`](https://solvent.gudman.xyz/policy) · [`/policy-compliance`](https://solvent.gudman.xyz/policy-compliance) · [`/passport`](https://solvent.gudman.xyz/passport) · [`/signal`](https://solvent.gudman.xyz/signal) · [`/inference-commitments`](https://solvent.gudman.xyz/inference-commitments)
+Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state) · [`/policy`](https://solvent.gudman.xyz/policy) · [`/policy-compliance`](https://solvent.gudman.xyz/policy-compliance) · [`/passport`](https://solvent.gudman.xyz/passport) · [`/signal`](https://solvent.gudman.xyz/signal) · [`/inference-commitments`](https://solvent.gudman.xyz/inference-commitments) · [`/inference-verification`](https://solvent.gudman.xyz/inference-verification) · [`/strategy-evidence`](https://solvent.gudman.xyz/strategy-evidence)
 
 Submission evidence packet: [`EVIDENCE.md`](EVIDENCE.md)
 Live cutover checklist: [`LIVE_CUTOVER.md`](LIVE_CUTOVER.md)
@@ -105,7 +105,11 @@ Every new decision receipt includes a hash-bound inference commitment packet:
 - `output_hash`: stable hash of the effective regime and optional advisor output.
 - `commitment_hash` / `proof_hash`: the verifier-facing commitment tying mode, model/kernel ID, input hash, and output hash together.
 
-This is not a TEE attestation and does not prove that a declared model ran. It lets reviewers verify that the declared inputs and outputs were hash-bound into the receipt chain rather than written after the fact. Public commitments are exposed at `/inference-commitments`; `/inference-proofs` remains as a compatibility alias.
+This is not a TEE attestation and does not prove that a declared model ran. It lets reviewers verify that the declared inputs and outputs were hash-bound into the receipt chain rather than written after the fact. Public commitments are exposed at `/inference-commitments`; `/inference-proofs` remains as a compatibility alias. `/inference-verification` goes one step further for deterministic cycles: it recomputes the input/output hashes, re-runs the committed deterministic regime classifier from the committed signal bytes, and verifies that the effective regime reconciliation matches the kernel's rules. It still does not claim TEE, zk, or external model runtime attestation.
+
+## Strategy evidence, not guaranteed alpha
+
+No repository can honestly guarantee a trading edge. SOLVENT treats edge as an evidence question: `python -m solvent.research.report` and `/strategy-evidence` compare each risk profile against hold-stables, best buy-and-hold, and equal-weight buy-and-hold benchmarks in declared stress scenarios. A profile only earns an evidence point when it beats the relevant benchmark without breaching the drawdown gate. The scored-week policy remains the signed manifest; the strategy report is supporting evidence, not a promise of future PnL.
 
 SOLVENT also exposes its latest daily regime read as an ERC-8183-ready paid signal. `/signal` returns a verifiable `solvent.daily-regime-signal` payload whose `signal_hash` binds to the latest receipt hash, current chain head, latest anchor, and inference commitment hash. For paid buyers, `solvent.commerce.server` runs the BNB Agent SDK ERC-8183 provider: funded jobs assigned to the agent wallet receive the same signal as a `DeliverableManifest`, and `ERC8183JobOps.submit_result()` submits the manifest hash on-chain.
 
@@ -155,7 +159,7 @@ python -m solvent.ops.readiness --data-dir ./data --profile submission
 python -m solvent.policy.verify --data-dir ./data                  # policy compliance + risk passport
 python -m solvent.ops.watcher --public-base https://solvent.gudman.xyz
 python -m solvent.research.backtest --days 30 --interval 1h       # compare risk profiles
-python -m solvent.research.report                                  # synthetic stress evidence
+python -m solvent.research.report                                  # stress + benchmark evidence
 python -m solvent.research.scan_universe --json                   # review-only candidate scanner
 python -m solvent.commerce.signal --data-dir ./data               # latest signal payload
 ```
@@ -170,7 +174,7 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, Binance live price cross-check, receipt hash-chain, raw data response commitments, inference commitments, signed/anchorable policy manifest generator, Proof-of-Policy verifier/risk passport, independent public watcher attestations, ERC-8183 signal provider, read-only API, ERC-8004 anchors, pre-trade anchors, intent-aware settlement verification, persistent halt latch, atomic local state writes, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), and risk-profile backtests.
+- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, Binance live price cross-check, receipt hash-chain, raw data response commitments, inference commitments, deterministic inference re-execution verification, signed/anchorable policy manifest generator, Proof-of-Policy verifier/risk passport, independent public watcher attestations, ERC-8183 signal provider, read-only API, ERC-8004 anchors, pre-trade anchors, intent-aware settlement verification, persistent halt latch, atomic local state writes, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), benchmarked strategy-evidence reports, and risk-profile backtests.
 - **Live now:** production live-mode rehearsal is running hourly on BSC mainnet from `/opt/solvent/data-prod`; public holdings are read from the funded TWAK wallet; ERC-8004 identity `136384` and receipt-chain anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
 - **Scored-window gate:** the live stack is active before the June 22 trading window; do not present pre-window rehearsal PnL as scored-week PnL. Remaining gates are operational: keep the wallet funded, keep x402 USD1 available, keep watchdog/deadman timers healthy, and publish the repo/demo only after approval.
@@ -187,7 +191,7 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 | On-chain Track 1 registration | Registered in the BNB Hack competition contract: `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`. |
 | On-chain proof | ERC-8004 agent `136384` on BSC mainnet with daily receipt-chain anchors plus optional pre-trade anchors. |
 | Submission package | Public repo is live at `https://github.com/Ridwannurudeen/solvent`; demo video and DoraHacks submission remain approval-gated. |
-| Reproducible proof | `/policy-compliance` and `python -m solvent.policy.verify` expose the policy-compliance checks and agent risk passport from the public/local logs. |
+| Reproducible proof | `/policy-compliance`, `/inference-verification`, `/strategy-evidence`, and local verifier CLIs expose policy checks, deterministic re-execution checks, benchmark evidence, and the agent risk passport from public/local logs. |
 
 ## Rubric map
 
