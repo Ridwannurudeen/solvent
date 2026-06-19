@@ -7,6 +7,7 @@ from solvent.receipts.server import (
     inference_commitments,
     inference_proofs,
     load_entries,
+    policy_compliance,
     policy_manifest,
     state,
     summary,
@@ -325,3 +326,12 @@ def test_policy_manifest_requires_published_manifest(tmp_path):
 
     with pytest.raises(ValueError, match="no policy manifest"):
         policy_manifest(tmp_path)
+
+
+def test_policy_compliance_endpoint_payload(tmp_path):
+    (tmp_path / "policy-manifest.json").write_text("{}")
+
+    out = policy_compliance(tmp_path)
+
+    assert out["schema"] == "solvent.policy-compliance.v1"
+    assert out["ok"] is False

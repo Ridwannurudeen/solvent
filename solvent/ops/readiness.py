@@ -205,6 +205,21 @@ def _public_checks(
         )
     )
 
+    ok, compliance_payload, detail = _fetch_json(fetcher, f"{base}/policy-compliance")
+    public["policy_compliance"] = compliance_payload
+    checks.append(
+        _check(
+            "public_policy_compliance",
+            ok
+            and bool(
+                compliance_payload
+                and compliance_payload.get("schema") == "solvent.policy-compliance.v1"
+                and compliance_payload.get("ok") is True
+            ),
+            detail if not compliance_payload else f"ok={compliance_payload.get('ok')}",
+        )
+    )
+
     ok, proof_body = _fetch_text(fetcher, f"{base}/proof")
     public["proof_present"] = ok
     checks.append(

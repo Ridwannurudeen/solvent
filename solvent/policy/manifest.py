@@ -16,6 +16,7 @@ from ..brain.advisor import MODEL
 from ..brain.proof import sha256_json
 from ..kernel.allowlist import ADDRESSES, ALLOWED_SYMBOLS, FLOOR_SYMBOLS, SLEEVE_SYMBOLS
 from ..kernel.rules import RiskConfig, risk_config_for_profile
+from ..ops.files import atomic_write_text
 
 SCHEMA = "solvent.policy-manifest.v1"
 SIGNING_PREFIX = "SOLVENT policy manifest"
@@ -200,8 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     body = json.dumps(payload, indent=2, sort_keys=True)
     if args.out:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(body + "\n")
+        atomic_write_text(args.out, body + "\n")
     else:
         print(body)
     return 0

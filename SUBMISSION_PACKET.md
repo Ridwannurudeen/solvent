@@ -36,6 +36,8 @@ is anchored on-chain under ERC-8004 agent `136384`.
 - Verifier API: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
 - Policy manifest: https://solvent.gudman.xyz/policy
+- Policy compliance / risk passport: https://solvent.gudman.xyz/policy-compliance
+- Passport alias: https://solvent.gudman.xyz/passport
 - ERC-8183 signal payload: https://solvent.gudman.xyz/signal
 - Inference commitments: https://solvent.gudman.xyz/inference-commitments
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
@@ -49,9 +51,23 @@ sudo -u solvent -H /opt/solvent/.venv/bin/python -m solvent.ops.readiness \
 ```
 
 The submission profile checks public `/verify`, `/state`, `/proof`, local
-receipt-chain integrity, unresolved execution attempts, and non-secret env
-presence. Approval-gated items are reported separately and do not trigger
-automation.
+receipt-chain integrity, `/policy-compliance`, unresolved execution attempts,
+and non-secret env presence. Approval-gated items are reported separately and do
+not trigger automation.
+
+## Local Proof Commands
+
+```bash
+python -m solvent.policy.verify --data-dir ./data
+python -m solvent.ops.watcher --public-base https://solvent.gudman.xyz --out ./data/watcher-attestations.jsonl
+python -m solvent.research.report
+```
+
+The policy verifier is the repo-side Proof-of-Policy check: it recomputes the
+manifest hash, verifies the declared manifest signature and ERC-8004 wallet
+anchor, validates scoped receipt and journal evidence against the mandate, and
+emits a risk passport. The watcher is read-only public monitoring. The strategy
+report is stress evidence, not a claim of statistically proven alpha.
 
 ## On-chain Proof
 
@@ -129,9 +145,10 @@ the deterministic kernel.
 5. TWAK live rehearsal tx on BscScan.
 6. `/inference-commitments` showing input/output/commitment hashes.
 7. `/signal` showing the ERC-8183-ready paid signal payload.
-8. `python verify_receipts.py` matching `/verify`.
-9. ERC-8004 anchor in `/state` and BscScan.
-10. Strategy/risk constitution in `kernel/rules.py` and signed, anchored `/policy` manifest.
+8. `/policy-compliance` showing the risk passport and green policy checks.
+9. `python verify_receipts.py` matching `/verify`.
+10. ERC-8004 anchor in `/state` and BscScan.
+11. Strategy/risk constitution in `kernel/rules.py` and signed, anchored `/policy` manifest.
 
 ## Do Not Claim
 

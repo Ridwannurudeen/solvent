@@ -24,6 +24,7 @@ from .kernel.allocator import (
 )
 from .kernel.rules import RiskConfig, RISK_PROFILE_NAMES, risk_config_for_profile
 from .kernel.state import MarketSignals, PortfolioState, SleevePosition
+from .ops.files import atomic_write_text
 from .receipts.chain import ReceiptChain
 
 logger = logging.getLogger(__name__)
@@ -56,8 +57,8 @@ class StateStore:
         return cls(path=path)
 
     def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
+        atomic_write_text(
+            self.path,
             json.dumps(
                 {
                     "start_equity_usd": self.start_equity_usd,
@@ -68,7 +69,7 @@ class StateStore:
                     "halt_reason": self.halt_reason,
                 },
                 indent=1,
-            )
+            ),
         )
 
     def latch_halt(self, *, now: datetime, reason: str) -> None:

@@ -24,6 +24,7 @@ from .exec.executor import Journal, PaperExecutor
 from .kernel.rules import RiskConfig, risk_config_for_profile
 from .kernel.state import MarketSignals, PortfolioState
 from .ops.alerts import alert
+from .ops.files import atomic_write_text
 from .ops.lock import SingleWriterLock
 from .receipts.chain import ReceiptChain
 from .receipts.pretrade import build_pretrade_publisher
@@ -99,8 +100,7 @@ class PaperBook:
             self.save()
 
     def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.holdings, indent=1))
+        atomic_write_text(self.path, json.dumps(self.holdings, indent=1))
 
     def apply(self, intent, signals) -> None:
         stable = {"USDT", "USDC", "FDUSD", "DAI", "USD1"}
@@ -316,14 +316,15 @@ def main() -> int:
             with SingleWriterLock(data_dir / "writer.lock"):
                 holdings = holdings_now()
                 if args.mode == "live":
-                    (data_dir / "live-holdings.json").write_text(
+                    atomic_write_text(
+                        data_dir / "live-holdings.json",
                         json.dumps(
                             {
                                 "ts": datetime.now(timezone.utc).isoformat(),
                                 "holdings": holdings,
                             },
                             separators=(",", ":"),
-                        )
+                        ),
                     )
                 summary = run_cycle(
                     source=source,
@@ -338,7 +339,7 @@ def main() -> int:
                     pretrade_publisher=pretrade_publisher,
                 )
                 heartbeat = data_dir / "heartbeat"
-                heartbeat.write_text(datetime.now(timezone.utc).isoformat())
+                atomic_write_text(heartbeat, datetime.now(timezone.utc).isoformat())
             if summary["intents"] > 0 or summary["degraded"]:
                 alert(f"SOLVENT [{args.mode}] {json.dumps(summary)}")
             return True

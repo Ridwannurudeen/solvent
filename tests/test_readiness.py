@@ -81,6 +81,10 @@ def _fetcher(head_hash):
             )
         if url.endswith("/inference-commitments"):
             return 200, json.dumps([])
+        if url.endswith("/policy-compliance"):
+            return 200, json.dumps(
+                {"schema": "solvent.policy-compliance.v1", "ok": True}
+            )
         if url.endswith("/proof"):
             return 200, "Mainnet evidence ... Track 1 registration"
         raise AssertionError(url)

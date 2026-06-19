@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..ops.alerts import alert
+from ..ops.files import atomic_write_text
 from .chain import GENESIS_HASH, ReceiptChain
 
 logger = logging.getLogger(__name__)
@@ -148,8 +149,7 @@ class AnchorMarkers:
             "tx_hash": tx_hash,
             "ts": (ts or datetime.now(timezone.utc)).isoformat(),
         }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.days, indent=1))
+        atomic_write_text(self.path, json.dumps(self.days, indent=1))
 
 
 def run_anchor(

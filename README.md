@@ -6,7 +6,7 @@ An autonomous BNB Smart Chain trading agent whose distinguishing feature is **ho
 
 **Live BSC mainnet agent:** https://solvent.gudman.xyz — live wallet holdings, equity vs BNB buy-and-hold, current barbell allocation, liveness heartbeat, local chain verification, anchor coverage, mainnet ERC-8004 anchors, and the full receipt stream.
 
-Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state) · [`/policy`](https://solvent.gudman.xyz/policy) · [`/signal`](https://solvent.gudman.xyz/signal) · [`/inference-commitments`](https://solvent.gudman.xyz/inference-commitments)
+Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state) · [`/policy`](https://solvent.gudman.xyz/policy) · [`/policy-compliance`](https://solvent.gudman.xyz/policy-compliance) · [`/passport`](https://solvent.gudman.xyz/passport) · [`/signal`](https://solvent.gudman.xyz/signal) · [`/inference-commitments`](https://solvent.gudman.xyz/inference-commitments)
 
 Submission evidence packet: [`EVIDENCE.md`](EVIDENCE.md)
 Live cutover checklist: [`LIVE_CUTOVER.md`](LIVE_CUTOVER.md)
@@ -38,8 +38,11 @@ solvent/
   receipts/
     chain.py       hash-chained receipt log + verify_chain()
     pretrade.py    optional ERC-8004 pre-trade commit publisher
-    server.py      read-only HTTP API (/, /receipts, /verify, /state, /signal)
+    server.py      read-only HTTP API (/, /receipts, /verify, /state, /signal, /passport)
     anchor.py      daily ERC-8004 on-chain anchor of the chain head
+  policy/
+    manifest.py    signed, anchorable scored-week mandate generator
+    verify.py      Proof-of-Policy compliance verifier + risk passport
   commerce/
     signal.py      ERC-8183-ready paid regime signal deliverable
     server.py      FastAPI ERC-8183 provider for funded buyer jobs
@@ -119,6 +122,8 @@ SOLVENT_ANCHOR_BACKEND=twak SOLVENT_AGENT_ID=... python -m solvent.policy.manife
 
 The published `/policy` endpoint serves only that file; it returns 404 until a manifest is explicitly generated. Each manifest includes the git commit, risk profile, numerical limits, pinned token addresses, data/execution requirements, settlement-verification requirements, result outcome states, `manifest_hash`, optional wallet signature, and optional ERC-8004 policy anchor tx.
 
+`python -m solvent.policy.verify --data-dir ./data` recomputes the manifest hash, verifies the declared manifest signature plus the ERC-8004 wallet anchor, checks receipt-chain integrity, enforces policy-scoped intent/result/settlement rules, checks x402 response commitments and spend caps, and emits a compact agent risk passport. The same report is public at `/policy-compliance`; `/passport` is an alias for judges who want the high-level metrics.
+
 ## ERC-8004 on-chain anchoring
 
 `receipts/anchor.py` posts the chain head as ERC-8004 metadata under SOLVENT's registered identity, one cheap tx/day. The BNB Hack path uses the TWAK CLI/keychain on **BSC mainnet**, so anchoring reuses the same self-custody wallet as execution and does not require a raw private key in the anchor environment.
@@ -147,7 +152,10 @@ python -m solvent.run --mode paper --data-dir ./data --once     # one cycle
 python -m solvent.run --mode paper --data-dir ./data --loop 3600  # hourly
 python -m solvent.receipts.server --data-dir ./data --port 3078   # serve the glass box
 python -m solvent.ops.readiness --data-dir ./data --profile submission
+python -m solvent.policy.verify --data-dir ./data                  # policy compliance + risk passport
+python -m solvent.ops.watcher --public-base https://solvent.gudman.xyz
 python -m solvent.research.backtest --days 30 --interval 1h       # compare risk profiles
+python -m solvent.research.report                                  # synthetic stress evidence
 python -m solvent.research.scan_universe --json                   # review-only candidate scanner
 python -m solvent.commerce.signal --data-dir ./data               # latest signal payload
 ```
@@ -162,7 +170,7 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, Binance live price cross-check, receipt hash-chain, raw data response commitments, inference commitments, signed/anchorable policy manifest generator, ERC-8183 signal provider, read-only API, ERC-8004 anchors, pre-trade anchors, intent-aware settlement verification, persistent halt latch, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), and risk-profile backtests.
+- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, Binance live price cross-check, receipt hash-chain, raw data response commitments, inference commitments, signed/anchorable policy manifest generator, Proof-of-Policy verifier/risk passport, independent public watcher attestations, ERC-8183 signal provider, read-only API, ERC-8004 anchors, pre-trade anchors, intent-aware settlement verification, persistent halt latch, atomic local state writes, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), and risk-profile backtests.
 - **Live now:** production live-mode rehearsal is running hourly on BSC mainnet from `/opt/solvent/data-prod`; public holdings are read from the funded TWAK wallet; ERC-8004 identity `136384` and receipt-chain anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
 - **Scored-window gate:** the live stack is active before the June 22 trading window; do not present pre-window rehearsal PnL as scored-week PnL. Remaining gates are operational: keep the wallet funded, keep x402 USD1 available, keep watchdog/deadman timers healthy, and publish the repo/demo only after approval.
@@ -179,6 +187,7 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 | On-chain Track 1 registration | Registered in the BNB Hack competition contract: `0xc4cdba129a1fb12714542ab991255c692240d6eb8bdfa716576199f9d31bda3a`. |
 | On-chain proof | ERC-8004 agent `136384` on BSC mainnet with daily receipt-chain anchors plus optional pre-trade anchors. |
 | Submission package | Public repo is live at `https://github.com/Ridwannurudeen/solvent`; demo video and DoraHacks submission remain approval-gated. |
+| Reproducible proof | `/policy-compliance` and `python -m solvent.policy.verify` expose the policy-compliance checks and agent risk passport from the public/local logs. |
 
 ## Rubric map
 

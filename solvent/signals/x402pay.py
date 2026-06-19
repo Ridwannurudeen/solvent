@@ -20,6 +20,7 @@ offers on BSC so the agent's entire economic life stays on one chain.
 import base64
 import hashlib
 import json
+import os
 import secrets
 import time
 from dataclasses import dataclass
@@ -230,6 +231,8 @@ class SpendLedger:
         }
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
 
 
 class X402MCPClient:

@@ -17,6 +17,8 @@ sudo -u solvent -H .venv/bin/python -m solvent.ops.preflight --env-file /opt/sol
 sudo -u solvent -H .venv/bin/python -m solvent.ops.readiness --env-file /opt/solvent/solvent.env --data-dir /opt/solvent/data-prod --profile live
 sudo -u solvent -H .venv/bin/python -m solvent.ops.exec_recovery --data-dir /opt/solvent/data-prod list-unresolved
 sudo -u solvent -H .venv/bin/python -m solvent.ops.state_control --data-dir /opt/solvent/data-prod status
+sudo -u solvent -H .venv/bin/python -m solvent.policy.verify --data-dir /opt/solvent/data-prod
+sudo -u solvent -H .venv/bin/python -m solvent.ops.watcher --out /opt/solvent/data-prod/watcher-attestations.jsonl
 sudo -u solvent -H twak compete status
 sudo -u solvent -H twak wallet balance --chain bsc --json
 sudo -u solvent -H twak swap USDT USDC --usd 1 --chain bsc --quote-only --json
@@ -37,6 +39,8 @@ Required outcomes:
   after review.
 - `/opt/solvent/data-prod/policy-manifest.json` exists and exposes
   `manifest_hash`, `signature`, and `anchor`.
+- `solvent.policy.verify` returns `ok=true`; watcher attestations append without
+  using any trading key.
 
 ## 2. Live data directory
 
@@ -74,6 +78,7 @@ sudo -u solvent -H .venv/bin/python -m solvent.ops.preflight --env-file /opt/sol
 sudo -u solvent -H .venv/bin/python -m solvent.ops.readiness --env-file /opt/solvent/solvent.env --profile live
 curl -s https://solvent.gudman.xyz/state
 curl -s https://solvent.gudman.xyz/verify
+curl -s https://solvent.gudman.xyz/policy-compliance
 ```
 
 If the one-shot cycle exits cleanly and the heartbeat is fresh, re-enable the

@@ -7,6 +7,8 @@
 - Verifier API: https://solvent.gudman.xyz/verify
 - State and anchors: https://solvent.gudman.xyz/state
 - Policy manifest: https://solvent.gudman.xyz/policy
+- Policy compliance / risk passport: https://solvent.gudman.xyz/policy-compliance
+- Passport alias: https://solvent.gudman.xyz/passport
 - ERC-8183 signal payload: https://solvent.gudman.xyz/signal
 - Inference commitments: https://solvent.gudman.xyz/inference-commitments
 - Standalone verifier: https://solvent.gudman.xyz/verify_receipts.py
@@ -36,6 +38,11 @@
 - CMC x402 response bodies are hash-committed in `data_purchases`, and live
   CMC prices are cross-checked against Binance public REST.
 - New receipts include hash-bound inference commitment packets. The public `/signal` payload binds the latest regime signal to the receipt hash, chain head, latest anchor, and inference commitment hash.
+- `/policy-compliance` recomputes the policy manifest hash, verifies the
+  declared manifest signature and ERC-8004 wallet anchor, checks receipt-chain
+  integrity, checks scoped intent/result policy compliance, verifies executed
+  settlement evidence, reports anchor coverage, and emits an agent risk
+  passport.
 
 ## Current Boundary
 
@@ -48,6 +55,8 @@
 ## Submission-gated Items
 
 - Keep the signed and ERC-8004-anchored policy manifest live for the scored week.
+- Keep `/policy-compliance` green and archive watcher attestations during the
+  scored week.
 - Record and upload the demo video.
 - Submit the DoraHacks BUIDL.
 - Increase or rebalance the scored-week stake only by explicit operator decision.

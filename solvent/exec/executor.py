@@ -101,6 +101,8 @@ class Journal:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
         self._entries[entry["key"]] = entry
 
     def state_of(self, key: str) -> str | None:

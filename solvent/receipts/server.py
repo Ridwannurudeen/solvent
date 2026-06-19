@@ -19,6 +19,7 @@ from pathlib import Path
 from ..commerce.signal import build_signal_payload
 from ..kernel.rules import RiskConfig
 from ..ops.watchdog import heartbeat_age
+from ..policy.verify import policy_compliance_report
 from .chain import verify_chain
 
 logger = logging.getLogger(__name__)
@@ -252,6 +253,10 @@ def policy_manifest(data_dir: Path) -> dict:
     return payload
 
 
+def policy_compliance(data_dir: Path) -> dict:
+    return policy_compliance_report(data_dir)
+
+
 class ReceiptHandler(BaseHTTPRequestHandler):
     data_dir: Path  # set on the class before serving
 
@@ -292,6 +297,8 @@ class ReceiptHandler(BaseHTTPRequestHandler):
                 self._send(policy_manifest(self.data_dir))
             except ValueError as exc:
                 self._send({"error": str(exc)}, status=404)
+        elif route in {"/policy-compliance", "/passport"}:
+            self._send(policy_compliance(self.data_dir))
         else:
             self._send({"error": "not found"}, status=404)
 
