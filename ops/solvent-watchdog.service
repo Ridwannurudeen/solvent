@@ -6,6 +6,9 @@ Type=oneshot
 User=solvent
 WorkingDirectory=/opt/solvent
 EnvironmentFile=/opt/solvent/solvent.env
+# Read-only service: strip signing secrets it never uses (least privilege).
+# (Telegram alert vars are kept so watchdog can still alert.)
+UnsetEnvironment=SOLVENT_PRIVATE_KEY SOLVENT_WALLET_PASSWORD TWAK_WALLET_PASSWORD TWAK_HMAC_SECRET TWAK_ACCESS_ID
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
