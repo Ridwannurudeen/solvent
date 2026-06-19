@@ -94,15 +94,17 @@ def compute_equity(
     signals: MarketSignals,
     stable_symbols: tuple[str, ...],
     stable_haircut_pct: float = 0.0,
-) -> tuple[float, float]:
-    """(equity_usd, floor_usd) from symbol->units holdings.
+) -> tuple[float, float, bool]:
+    """(equity_usd, floor_usd, priced_complete) from symbol->units holdings.
 
-    Stables are valued at $1 (they are the unit of account here);
-    everything else needs a price — a held token with no price marks the
-    cycle degraded upstream, so this stays simple.
+    Stables are valued at $1 (they are the unit of account here); everything
+    else needs a price. `priced_complete` is False when a held non-stable
+    token has no price this cycle, so callers can refuse to act on an equity
+    that is understated (and would manufacture a spurious drawdown).
     """
     equity = 0.0
     floor = 0.0
+    priced_complete = True
     for sym, units in holdings.items():
         if sym in stable_symbols:
             stable_mark = min(float(signals.prices.get(sym, 1.0)), 1.0) * (
@@ -115,7 +117,9 @@ def compute_equity(
             price = signals.prices.get(sym)
             if price is not None:
                 equity += units * price
-    return equity, floor
+            elif units > 0:
+                priced_complete = False
+    return equity, floor, priced_complete
 
 
 def run_cycle(
@@ -139,14 +143,17 @@ def run_cycle(
     day = now.strftime("%Y-%m-%d")
 
     signals, purchases = source.fetch()
-    equity, floor = compute_equity(
+    equity, floor, priced_complete = compute_equity(
         holdings, signals, cfg.floor_symbols, cfg.stable_haircut_pct
     )
     _sync_position_notional(store, holdings, signals)
 
-    if store.start_equity_usd <= 0 and equity > 0:
+    # A held token with no price understates equity; never seed start equity
+    # or ratchet the peak from an incomplete (or degraded) read, or a single
+    # price gap would permanently skew the trailing-drawdown kill switch.
+    if store.start_equity_usd <= 0 and equity > 0 and priced_complete:
         store.start_equity_usd = equity
-    if equity > store.peak_equity_usd:
+    if priced_complete and not signals.degraded and equity > store.peak_equity_usd:
         store.peak_equity_usd = equity
 
     confirmed_today = journal.confirmed_trades_on(day)
@@ -189,6 +196,7 @@ def run_cycle(
     halt_reason = None
     if (
         store.runtime_status != "HALTED"
+        and priced_complete
         and state.trailing_drawdown_pct >= cfg.kill_switch_drawdown_pct
     ):
         halt_reason = (
@@ -199,11 +207,19 @@ def run_cycle(
         store.latch_halt(now=now, reason=halt_reason)
 
     if store.runtime_status == "HALTED":
+        # Halted = no risk-taking, but a $2 stable->stable qualification trade
+        # adds no risk and keeps the day from being DQ'd for inactivity.
         intents = []
+        qual = qualification_intent(state, cfg)
+        if qual is not None:
+            intents.append(qual)
     elif store.runtime_status == "RISK_REDUCING":
         if state.position is None:
             store.runtime_status = "HALTED"
             intents = []
+            qual = qualification_intent(state, cfg)
+            if qual is not None:
+                intents.append(qual)
         else:
             intents = [
                 TradeIntent(
@@ -214,6 +230,15 @@ def run_cycle(
                     reason=store.halt_reason or "RISK_REDUCING: exit open sleeve",
                 )
             ]
+    elif not priced_complete and not signals.degraded and state.position is not None:
+        # Feed is up but one held token is unpriced: equity is understated, so
+        # any drawdown/stop signal is spurious. Hold the position and act on no
+        # price we don't have; still qualify the day. (A fully degraded feed
+        # falls through to decide()'s degraded-data unwind instead.)
+        intents = []
+        qual = qualification_intent(state, cfg)
+        if qual is not None:
+            intents.append(qual)
     else:
         intents = decide(state, signals, cfg, regime_override=effective_regime)
         qual = qualification_intent(state, cfg)
@@ -331,6 +356,7 @@ def run_cycle(
             },
             "active_risk_profile": active_profile,
             "stable_haircut_pct": cfg.stable_haircut_pct,
+            "priced_complete": priced_complete,
             "runtime_status": store.runtime_status,
             "halt_reason": store.halt_reason,
             "degraded": signals.degraded,
