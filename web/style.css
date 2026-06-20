@@ -54,7 +54,7 @@ h1,h2,h3 { letter-spacing:-.02em; }
 .brand .name { font-size:16px; font-weight:800; letter-spacing:.12em; }
 .brand .chain { font:600 10px var(--mono); color:var(--gold); border:1px solid var(--gold-dim); background:#f0b90b14; padding:3px 8px; border-radius:5px; letter-spacing:.08em; white-space:nowrap; }
 .nav-links { display:flex; gap:26px; margin-left:8px; }
-.nav-links a { color:var(--text-2); font-size:13.5px; font-weight:500; position:relative; padding:4px 0; transition:color .15s; }
+.nav-links a { color:var(--text-2); font-size:13.5px; font-weight:500; position:relative; padding:4px 0; transition:color .15s; white-space:nowrap; }
 .nav-links a:hover { color:var(--text); text-decoration:none; }
 .nav-links a.active { color:var(--text); }
 .nav-links a.active::after { content:""; position:absolute; left:0; right:0; bottom:-21px; height:2px; background:var(--gold); border-radius:2px; }
@@ -310,6 +310,10 @@ footer { position:relative; z-index:1; margin-top:80px; border-top:1px solid var
 /* error banner */
 .err-banner { display:none; padding:10px 28px; background:#2a1218; border-bottom:1px solid #4a1d27; color:var(--down); font-size:13px; text-align:center; position:relative; z-index:1; }
 .err-banner.show { display:block; }
+
+/* hide the verbose live-status string before the nav crowds (it's mirrored in
+   the hero KPI strip); links stay */
+@media (max-width:1160px) { .nav-status { display:none; } }
 
 @media (max-width:900px) {
   .hero-grid { grid-template-columns:1fr; gap:32px; }
