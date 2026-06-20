@@ -81,7 +81,6 @@ def build_signal_payload(
             "chain_ok": ok,
             "receipts_url": f"{public_base_url.rstrip('/')}/receipts",
             "verify_url": f"{public_base_url.rstrip('/')}/verify",
-            "inference_proofs_url": f"{public_base_url.rstrip('/')}/inference-proofs",
             "inference_commitments_url": f"{public_base_url.rstrip('/')}/inference-commitments",
             "latest_anchor": latest_anchor,
         },
@@ -101,7 +100,6 @@ def build_signal_payload(
             "type": "hash_commitment",
             "inference_commitment_hash": proof.get("commitment_hash")
             or proof.get("proof_hash"),
-            "inference_proof_hash": proof.get("proof_hash"),
             "inference_input_hash": proof.get("input_hash"),
             "inference_output_hash": proof.get("output_hash"),
         },
@@ -129,7 +127,6 @@ def build_job_response(data_dir: Path) -> tuple[str, dict[str, Any]]:
         "receipt_hash": payload["source"]["receipt_hash"],
         "receipt_head_hash": payload["source"]["receipt_head_hash"],
         "inference_commitment_hash": payload["proof"]["inference_commitment_hash"],
-        "inference_proof_hash": payload["proof"]["inference_proof_hash"],
     }
     return canonical_json(payload), metadata
 

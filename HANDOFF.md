@@ -5,7 +5,7 @@ below are closed. Everything in the "Done" section is committed, tested, pushed.
 
 ## State
 - Branch `fix/audit-remediation` → PR #1, base `codex/solvent-private-prep`.
-- 9 commits; `python -m pytest -q` → **245 passed**; `ruff check solvent tests` → clean.
+- Merged into `codex/solvent-private-prep`; `python -m pytest -q` -> **252 passed**; `ruff check solvent tests` -> clean.
 - A two-pass audit found 21 limitation clusters; all are addressed (FIX with a
   regression test each, or MITIGATE + honest docs for inherent design limits).
 - House rules: no Claude/Anthropic attribution in commits/PRs; never submit
@@ -100,17 +100,10 @@ Actual VPS results:
 - `verify_receipts.py` returned `OK - 37 receipts, chain intact` with the same
   head hash as `/verify`.
 
-Remaining readiness blocker: `alerts_configured` is still false because
-`SOLVENT_TG_BOT_TOKEN` / `SOLVENT_TG_CHAT_ID` are not configured. TWAK env vars
-are no longer a hard blocker when `twak auth status` and wallet balance probes
-pass through the local TWAK auth/keychain setup.
+Telegram alerts and the read-only Telegram command bot are configured on the VPS through `/etc/solvent/telegram-alerts`. `solvent-telegram.service` is active, the bot is restricted to the configured chat id, and the unit strips signing/TWAK secrets with `UnsetEnvironment=`.
 
-## Open item 3 — decision (not code): #1 anchoring window
-Mitigated + documented only. To tighten the ≤24h un-anchored rewrite window,
-enable pre-trade anchoring (`SOLVENT_PRETRADE_ANCHOR=1`, already implemented per
-`README.md:98`) and/or add a more-frequent head-anchor timer. Trade-off: one
-extra on-chain metadata tx (gas) before every trade during the scored week.
-Owner decision — do not enable by default.
+## Item 3 - #1 anchoring window
+Pre-trade anchoring is enabled for live runs with `SOLVENT_PRETRADE_ANCHOR=1`. The public receipt-head anchor still runs on the daily timer, so `/verify` may show recent unanchored receipt-head entries until the next daily anchor lands. That is an honest trust-boundary display, not a chain failure.
 
 ## Inherent limits left as MITIGATE (by design, not bugs)
 #1 anchoring window, #2 inference = self-consistency (not attestation), #5
