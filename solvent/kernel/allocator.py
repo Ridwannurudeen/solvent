@@ -35,6 +35,10 @@ class TradeIntent:
     to_symbol: str
     notional_usd: float
     reason: str
+    # Expected execution price of `to_symbol` at decision time, in USD. Set on
+    # ENTER so the settlement verifier can enforce a min-units floor on a buy;
+    # None for stable<->stable trades the verifier checks in USD directly.
+    expected_price_usd: float | None = None
 
 
 # Momentum score below which we never enter, regardless of regime.
@@ -255,6 +259,7 @@ def decide(
                             f"ENTER: regime risk-on, {symbol} top momentum "
                             f"{score:.2f}, sleeve {cap_frac:.0%} of equity"
                         ),
+                        expected_price_usd=signals.prices.get(symbol),
                     )
                 )
     return intents

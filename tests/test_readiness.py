@@ -1,9 +1,10 @@
 import json
+import os
 from datetime import datetime, timezone
 
 from solvent.exec.executor import Journal
 from solvent.kernel.allocator import IntentKind, TradeIntent
-from solvent.ops.readiness import readiness
+from solvent.ops.readiness import load_alert_env_file, readiness
 from solvent.receipts.chain import DataPurchase, ReceiptChain
 
 
@@ -164,6 +165,113 @@ def test_readiness_fails_on_public_head_mismatch(tmp_path, monkeypatch):
         c["name"] == "public_head_matches_local" and c["ok"] is False
         for c in report["checks"]
     )
+
+
+def test_live_readiness_requires_twak_credentials(tmp_path, monkeypatch):
+    # Full SOLVENT_* live env but neither explicit TWAK env nor working local
+    # TWAK setup: the live trade path cannot broadcast, so readiness fails.
+    data_dir, head_hash = _data_dir(tmp_path, paper=False)
+    monkeypatch.setenv("SOLVENT_PRIVATE_KEY", "x")
+    monkeypatch.setenv("SOLVENT_WALLET_PASSWORD", "x")
+    monkeypatch.setenv("SOLVENT_WALLET_ADDRESS", "0x" + "12" * 20)
+    monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+    monkeypatch.setenv("SOLVENT_TG_BOT_TOKEN", "x")
+    monkeypatch.setenv("SOLVENT_TG_CHAT_ID", "x")
+    for name in ("TWAK_ACCESS_ID", "TWAK_HMAC_SECRET", "TWAK_WALLET_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+
+    report = readiness(data_dir, profile="live", fetcher=_fetcher(head_hash))
+
+    assert report["ok"] is False
+    assert any(
+        c["name"] == "live_twak_credentials_available" and c["required"] and not c["ok"]
+        for c in report["checks"]
+    )
+
+
+def test_live_readiness_accepts_twak_file_auth(tmp_path, monkeypatch):
+    data_dir, head_hash = _data_dir(tmp_path, paper=False)
+    monkeypatch.setenv("SOLVENT_TG_BOT_TOKEN", "x")
+    monkeypatch.setenv("SOLVENT_TG_CHAT_ID", "x")
+
+    def fake_preflight(_data_dir, include_twak=True):
+        assert include_twak is True
+        return {
+            "env": {
+                "required_live": {
+                    "SOLVENT_PRIVATE_KEY": True,
+                    "SOLVENT_WALLET_PASSWORD": True,
+                    "SOLVENT_WALLET_ADDRESS": True,
+                    "SOLVENT_TRADE_NETWORK": True,
+                    "SOLVENT_TWAK_CHAIN": True,
+                },
+                "required_live_twak": {
+                    "TWAK_ACCESS_ID": False,
+                    "TWAK_HMAC_SECRET": False,
+                    "TWAK_WALLET_PASSWORD": False,
+                },
+            },
+            "paper_data_in_dir": False,
+            "journal_has_unresolved": False,
+            "twak": {
+                "auth_status": {"ok": True},
+                "wallet_balance": {"ok": True, "result": {"totalUsd": 1.0}},
+            },
+        }
+
+    monkeypatch.setattr("solvent.ops.readiness.preflight", fake_preflight)
+
+    report = readiness(data_dir, profile="live", fetcher=_fetcher(head_hash))
+
+    assert report["ok"] is True
+    assert any(
+        c["name"] == "live_twak_credentials_available"
+        and c["ok"]
+        and "local setup" in c["detail"]
+        for c in report["checks"]
+    )
+
+
+def test_load_alert_env_file_overrides_blank_alert_vars(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_TG_BOT_TOKEN", "")
+    monkeypatch.setenv("SOLVENT_TG_CHAT_ID", "")
+    monkeypatch.delenv("IGNORED_SECRET", raising=False)
+    path = tmp_path / "telegram-alerts"
+    path.write_text(
+        "\n".join(
+            [
+                "SOLVENT_TG_BOT_TOKEN='new-token'",
+                'SOLVENT_TG_CHAT_ID="new-chat"',
+                "IGNORED_SECRET=not-loaded",
+            ]
+        )
+    )
+
+    assert load_alert_env_file(path) is True
+
+    assert "IGNORED_SECRET" not in os.environ
+    assert os.environ["SOLVENT_TG_BOT_TOKEN"] == "new-token"
+    assert os.environ["SOLVENT_TG_CHAT_ID"] == "new-chat"
+
+
+def test_load_alert_env_file_missing_file_is_noop(tmp_path):
+    assert load_alert_env_file(tmp_path / "missing") is False
+
+
+def test_empty_local_chain_surfaces_explicit_head_check(tmp_path):
+    # No local receipts: the head-vs-local check must appear explicitly (as a
+    # non-required note), not be silently omitted and read as a pass. (#15)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    report = readiness(
+        data_dir, profile="submission", fetcher=_fetcher("0x" + "00" * 32)
+    )
+
+    head = [c for c in report["checks"] if c["name"] == "public_head_matches_local"]
+    assert head and head[0]["required"] is False
+    assert "no local chain" in head[0]["detail"]
 
 
 def test_readiness_fails_on_unresolved_journal(tmp_path, monkeypatch):

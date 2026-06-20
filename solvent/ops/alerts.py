@@ -18,13 +18,16 @@ def alert(text: str) -> bool:
     if not token or not chat_id:
         logger.debug("alerts disabled (no telegram env)")
         return False
-    try:
-        resp = httpx.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text[:4000]},
-            timeout=10,
-        )
-        return resp.status_code == 200
-    except httpx.HTTPError as e:
-        logger.warning("alert failed: %s", e)
-        return False
+    for attempt in range(2):
+        try:
+            resp = httpx.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text[:4000]},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return True
+            logger.warning("alert non-200: %s", resp.status_code)
+        except Exception as e:  # alerting must never break a cycle
+            logger.warning("alert failed (attempt %d): %s", attempt + 1, e)
+    return False

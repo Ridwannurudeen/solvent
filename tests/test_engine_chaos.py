@@ -112,7 +112,7 @@ def test_compute_equity_marks_stables_conservatively():
         prices={"USDT": 0.98, "USDC": 1.02, "CAKE": 2.5},
     )
 
-    equity, floor = compute_equity(
+    equity, floor, priced_complete = compute_equity(
         {"USDT": 10.0, "USDC": 10.0, "CAKE": 2.0},
         signals,
         ("USDT", "USDC"),
@@ -121,6 +121,7 @@ def test_compute_equity_marks_stables_conservatively():
 
     assert floor == pytest.approx(10.0 * 0.98 * 0.99 + 10.0 * 1.0 * 0.99)
     assert equity == pytest.approx(floor + 5.0)
+    assert priced_complete is True
 
 
 def test_degraded_data_freezes_trading(tmp_path):
@@ -201,6 +202,61 @@ def test_persistent_halt_blocks_later_entries(tmp_path):
     assert summary["intents"] == 0
     assert receipt["signals"]["runtime_status"] == "HALTED"
     assert "operator review required" in receipt["thesis"]
+
+
+def test_missing_held_price_does_not_phantom_halt(tmp_path):
+    # Feed is up but the held sleeve token has no price this cycle: equity is
+    # understated (floor only), so a naive trailing-drawdown read would trip the
+    # kill switch. The agent must hold, not latch a permanent halt. (#11)
+    signals = MarketSignals(
+        fear_greed=60,
+        btc_funding_rate=0.0001,
+        momentum={},
+        prices={"USDT": 1.0},  # CAKE price absent this cycle
+        degraded=False,
+    )
+    store = StateStore(
+        path=tmp_path / "state.json",
+        start_equity_usd=300.0,
+        peak_equity_usd=400.0,
+        position=_position(),
+    )
+
+    summary, receipt = _run(
+        tmp_path, signals, {"USDT": 240.0, "CAKE": 24.0}, store, NOON
+    )
+
+    assert summary["intents"] == 0  # held: no exit, no entry
+    assert store.runtime_status == "ACTIVE"  # not latched on a price gap
+    assert store.position is not None  # position retained
+    assert store.peak_equity_usd == 400.0  # peak not skewed by partial equity
+    assert receipt["signals"]["priced_complete"] is False
+
+
+def test_halted_agent_still_qualifies_after_deadline(tmp_path):
+    # A latched HALT must not cause a DQ-for-inactivity: the $2 stable->stable
+    # qualification trade still fires after the deadline. (#12)
+    signals = MarketSignals(
+        fear_greed=80,
+        btc_funding_rate=0.0001,
+        momentum={"CAKE": 5.0},
+        prices={"CAKE": 2.5},
+        degraded=False,
+    )
+    store = StateStore(
+        path=tmp_path / "state.json",
+        start_equity_usd=300.0,
+        peak_equity_usd=400.0,
+        runtime_status="HALTED",
+        halt_reason="operator review required",
+    )
+
+    summary, receipt = _run(tmp_path, signals, {"USDT": 300.0}, store, EVENING)
+
+    assert summary["intents"] == 1
+    assert receipt["intents"][0]["kind"] == "qualify"
+    assert store.runtime_status == "HALTED"  # still halted; no risk re-entry
+    assert store.position is None
 
 
 def test_stop_loss_exits_losing_position(tmp_path):

@@ -31,7 +31,15 @@ class SingleWriterLock:
                 except FileNotFoundError:
                     continue
                 if age > self.stale_after_s:
-                    self.path.unlink(missing_ok=True)
+                    # Atomic steal: os.replace renames the stale lock aside; only
+                    # one racer wins it. A blind unlink here would let a second
+                    # racer delete the *fresh* lock the winner just created.
+                    steal = self.path.parent / f"{self.path.name}.steal-{os.getpid()}"
+                    try:
+                        os.replace(self.path, steal)
+                    except (FileNotFoundError, OSError):
+                        continue  # another racer already stole/cleared it
+                    steal.unlink(missing_ok=True)
                     continue
                 raise RuntimeError(f"state writer already active: {self.path}") from exc
 

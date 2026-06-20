@@ -170,6 +170,69 @@ def test_live_receipt_verifier_checks_logs_and_balance_deltas():
     assert proof["to_balance_delta"] == pytest.approx(1.99)
 
 
+def _buy_intent(price=2.5, notional=60.0):
+    return TradeIntent(
+        kind=IntentKind.ENTER,
+        from_symbol="USDT",
+        to_symbol="CAKE",
+        notional_usd=notional,
+        reason="enter",
+        expected_price_usd=price,
+    )
+
+
+def _buy_receipt(router, cake_units_raw):
+    return {
+        "status": 1,
+        "blockNumber": 9,
+        "logs": [
+            {
+                "address": ADDRESSES["USDT"],
+                "topics": [TRANSFER_TOPIC, _topic_addr(WALLET), _topic_addr(router)],
+                "data": _data(60 * 10**18),
+            },
+            {
+                "address": ADDRESSES["CAKE"],
+                "topics": [TRANSFER_TOPIC, _topic_addr(router), _topic_addr(WALLET)],
+                "data": _data(cake_units_raw),
+            },
+        ],
+    }
+
+
+def test_buy_verifier_accepts_within_slippage_fill():
+    # $60 buy at $2.5 -> min 23.52 CAKE; a 24-CAKE fill passes. (#3)
+    router = "0x1111111111111111111111111111111111111111"
+    raw = {ADDRESSES["USDT"]: 100 * 10**18, ADDRESSES["CAKE"]: 0}
+    dec = {ADDRESSES["USDT"]: 18, ADDRESSES["CAKE"]: 18}
+    book, _ = make_book(raw, dec)
+    book.w3 = FakeW3(_buy_receipt(router, 24 * 10**18), {"from": WALLET})
+    verifier = LiveReceiptVerifier(book, slippage_pct=1.0)
+    before = verifier.before(_buy_intent())
+    raw[ADDRESSES["USDT"]] = 40 * 10**18
+    raw[ADDRESSES["CAKE"]] = 24 * 10**18
+
+    proof = verifier(_buy_intent(), "0x" + "cd" * 32, before)
+    assert proof["to_transfer_in"] == 24.0
+
+
+def test_buy_verifier_rejects_dust_fill():
+    # A sandwich/honeypot returning ~1 CAKE for a $60 buy must fail, not record
+    # as a full fill. (#3)
+    router = "0x1111111111111111111111111111111111111111"
+    raw = {ADDRESSES["USDT"]: 100 * 10**18, ADDRESSES["CAKE"]: 0}
+    dec = {ADDRESSES["USDT"]: 18, ADDRESSES["CAKE"]: 18}
+    book, _ = make_book(raw, dec)
+    book.w3 = FakeW3(_buy_receipt(router, 1 * 10**18), {"from": WALLET})
+    verifier = LiveReceiptVerifier(book, slippage_pct=1.0)
+    before = verifier.before(_buy_intent())
+    raw[ADDRESSES["USDT"]] = 40 * 10**18
+    raw[ADDRESSES["CAKE"]] = 1 * 10**18
+
+    with pytest.raises(RuntimeError, match="units below minimum"):
+        verifier(_buy_intent(), "0x" + "cd" * 32, before)
+
+
 def test_live_receipt_verifier_rejects_missing_incoming_transfer():
     router = "0x1111111111111111111111111111111111111111"
     raw = {ADDRESSES["USDT"]: 100 * 10**18, ADDRESSES["USDC"]: 0}

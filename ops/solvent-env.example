@@ -47,8 +47,12 @@ SOLVENT_BSC_NETWORK=bsc-mainnet
 # ERC-8183 signal-selling stretch. Buyers create/fund ERC-8183 jobs assigned to
 # the agent wallet; the provider serves the latest regime signal and submits a
 # hash-verifiable deliverable manifest on-chain through the SDK.
+# Only enable this AND expose nginx /erc8183 together: with the service down the
+# endpoint 502s. The service refuses to start unless SERVICE_PRICE > 0 — a 0
+# price disables the budget floor and lets any caller drain agent gas.
 SOLVENT_ERC8183_ENABLED=0
 # SOLVENT_ERC8183_NETWORK=bsc-mainnet
 # SOLVENT_ERC8183_AGENT_URL=https://solvent.gudman.xyz/erc8183
 # SOLVENT_ERC8183_STORAGE_DIR=/opt/solvent/data-prod/erc8183
-# SOLVENT_ERC8183_SERVICE_PRICE=0
+# Required (> 0) when SOLVENT_ERC8183_ENABLED=1; e.g. 0.05
+# SOLVENT_ERC8183_SERVICE_PRICE=0.05

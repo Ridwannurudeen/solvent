@@ -14,9 +14,15 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from ..receipts.chain import GENESIS_HASH, verify_chain
-from .preflight import REQUIRED_LIVE_ENV, load_env_file, preflight
+from .preflight import (
+    REQUIRED_LIVE_ENV,
+    REQUIRED_LIVE_TWAK_ENV,
+    load_env_file,
+    preflight,
+)
 
 DEFAULT_PUBLIC_BASE = "https://solvent.gudman.xyz"
+DEFAULT_ALERT_ENV_FILE = Path("/etc/solvent/telegram-alerts")
 
 Fetcher = Callable[[str], tuple[int, str]]
 
@@ -41,6 +47,25 @@ def _fetch_json(fetcher: Fetcher, url: str) -> tuple[bool, dict | None, str]:
         return True, json.loads(body), "ok"
     except ValueError as exc:
         return False, None, f"invalid JSON: {exc}"
+
+
+def load_alert_env_file(path: Path = DEFAULT_ALERT_ENV_FILE) -> bool:
+    """Load only non-empty Telegram alert vars from the optional secret file."""
+    if not path.exists():
+        return False
+    allowed = {"SOLVENT_TG_BOT_TOKEN", "SOLVENT_TG_CHAT_ID"}
+    loaded = False
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        if key in allowed and value:
+            os.environ[key] = value
+            loaded = True
+    return loaded
 
 
 def _fetch_text(fetcher: Fetcher, url: str) -> tuple[bool, str]:
@@ -90,14 +115,27 @@ def _public_checks(
             detail if not verify_payload else f"{verify_payload.get('count')} receipts",
         )
     )
-    if ok and verify_payload and local["count"] > 0:
-        checks.append(
-            _check(
-                "public_head_matches_local",
-                verify_payload.get("head_hash") == local["head_hash"],
-                f"public={verify_payload.get('head_hash')} local={local['head_hash']}",
+    if ok and verify_payload:
+        if local["count"] > 0:
+            checks.append(
+                _check(
+                    "public_head_matches_local",
+                    verify_payload.get("head_hash") == local["head_hash"],
+                    f"public={verify_payload.get('head_hash')} "
+                    f"local={local['head_hash']}",
+                )
             )
-        )
+        else:
+            # No local chain to compare — surface it explicitly instead of
+            # silently omitting the check (which read as a pass).
+            checks.append(
+                _check(
+                    "public_head_matches_local",
+                    True,
+                    "no local chain to compare",
+                    required=False,
+                )
+            )
 
     ok, state_payload, detail = _fetch_json(fetcher, f"{base}/state")
     public["state"] = state_payload
@@ -297,6 +335,61 @@ def _preflight_checks(report: dict, profile: str) -> list[dict]:
             required=profile == "live",
         )
     )
+    twak_env = report["env"].get("required_live_twak", {})
+    twak_env_ok = all(twak_env.get(name) for name in REQUIRED_LIVE_TWAK_ENV)
+    twak = report.get("twak")
+    twak_auth_ok = bool((twak or {}).get("auth_status", {}).get("ok"))
+    twak_balance_ok = bool((twak or {}).get("wallet_balance", {}).get("ok"))
+    twak_ready = twak_env_ok or (twak_auth_ok and twak_balance_ok)
+    if twak_env_ok:
+        twak_detail = "all twak signing creds present"
+    elif twak_auth_ok and twak_balance_ok:
+        twak_detail = "twak auth and wallet are available via local setup"
+    else:
+        twak_detail = (
+            ", ".join(name for name in REQUIRED_LIVE_TWAK_ENV if not twak_env.get(name))
+            or "twak auth/balance probe failed"
+        )
+    checks.append(
+        _check(
+            "live_twak_credentials_available",
+            twak_ready,
+            twak_detail,
+            required=profile == "live",
+        )
+    )
+    alerts_ok = bool(
+        os.environ.get("SOLVENT_TG_BOT_TOKEN") and os.environ.get("SOLVENT_TG_CHAT_ID")
+    )
+    checks.append(
+        _check(
+            "alerts_configured",
+            alerts_ok,
+            "telegram alert env present"
+            if alerts_ok
+            else "SOLVENT_TG_BOT_TOKEN / SOLVENT_TG_CHAT_ID missing",
+            required=profile == "live",
+        )
+    )
+    if twak is not None:
+        auth = twak.get("auth_status") or {}
+        checks.append(
+            _check(
+                "live_twak_auth",
+                bool(auth.get("ok")),
+                f"auth ok={auth.get('ok')}",
+                required=profile == "live",
+            )
+        )
+        balance = twak.get("wallet_balance") or {}
+        checks.append(
+            _check(
+                "live_wallet_balance_readable",
+                bool(balance.get("ok")) and balance.get("result") is not None,
+                f"balance ok={balance.get('ok')}",
+                required=profile == "live",
+            )
+        )
     return checks
 
 
@@ -310,7 +403,9 @@ def readiness(
     fetcher: Fetcher = _urlopen_fetch,
 ) -> dict:
     local, checks = _local_chain(data_dir)
-    report = preflight(data_dir, include_twak=include_twak)
+    # Live readiness must actually probe the TWAK trade path (auth + balance),
+    # not just env presence; the read-only checks never broadcast.
+    report = preflight(data_dir, include_twak=include_twak or profile == "live")
     public, public_checks = _public_checks(
         public_base, local, fetcher, skip_public=skip_public
     )
@@ -353,6 +448,10 @@ def main() -> int:
 
     if args.env_file:
         load_env_file(args.env_file)
+    load_alert_env_file(
+        Path(os.environ.get("SOLVENT_ALERT_ENV_FILE", str(DEFAULT_ALERT_ENV_FILE)))
+    )
+    if args.env_file:
         default_dir = Path("/opt/solvent/data")
         if args.data_dir == default_dir:
             args.data_dir = Path(os.environ.get("SOLVENT_DATA_DIR", default_dir))

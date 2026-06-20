@@ -9,10 +9,16 @@ from statistics import mean
 from .backtest import DEFAULT_FEE_PCT, Candle, profile_configs, simulate, stress_suite
 
 
+# BSC swap gas + the per-trade pre-trade anchor tx, charged per executed trade.
+# Modeled so the evidence report's net returns are not gas-free fiction.
+DEFAULT_PER_TRADE_COST_USD = 0.10
+
+
 def strategy_report(
     *,
     start_usd: float = 300.0,
     fee_pct: float = DEFAULT_FEE_PCT,
+    per_trade_cost_usd: float = DEFAULT_PER_TRADE_COST_USD,
     profiles: tuple[str, ...] = (
         "safety",
         "conviction_50",
@@ -33,6 +39,7 @@ def strategy_report(
                     profile=name,
                     start_usd=start_usd,
                     fee_pct=fee_pct,
+                    per_trade_cost_usd=per_trade_cost_usd,
                 )
             )
             for name in profiles
@@ -71,6 +78,7 @@ def strategy_report(
         "schema": "solvent.strategy-evidence.v1",
         "start_usd": start_usd,
         "fee_pct": fee_pct,
+        "per_trade_cost_usd": per_trade_cost_usd,
         "profiles": list(profiles),
         "scenarios": scenarios,
         "profile_scorecard": scorecard,
@@ -99,6 +107,10 @@ def strategy_report(
         },
         "limits": [
             "Synthetic stress scenarios are execution-safety evidence, not proof of alpha.",
+            "Scenarios and the scoring rubric are self-authored, on a single symbol "
+            "over a short window: evidence points can be moved by scenario choice.",
+            "Net returns now include a per-trade gas/anchor cost, but not MEV, route "
+            "liquidity, or price impact; live results will be worse than modeled.",
             "Historical mode uses close-to-close candles and does not model MEV or route liquidity.",
             "Scored-window policy must be frozen separately in the signed policy manifest.",
         ],

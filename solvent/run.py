@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 PAPER_SEED_USDT = 300.0
 PAPER_FEE = 0.0025  # one-side DEX fee haircut applied to every fill
+PAPER_SLIPPAGE = 0.001  # price-impact proxy on every fill (live DEX, not CEX)
+PAPER_GAS_USD = 0.10  # BSC swap gas + per-trade pre-trade anchor tx
 
 _PROFILE_ORDER = ("safety", "conviction_50", "tournament_50", "tournament_60")
 
@@ -120,8 +122,12 @@ class PaperBook:
         self.holdings[intent.from_symbol] = (
             self.holdings.get(intent.from_symbol, 0.0) - usd / p_from
         )
+        # Received value: fee + price-impact haircut, then a fixed gas/anchor
+        # cost — so paper is not a gas-free, zero-slippage fiction that
+        # overstates what live execution actually returns.
+        received_usd = max(0.0, usd * (1 - PAPER_FEE - PAPER_SLIPPAGE) - PAPER_GAS_USD)
         self.holdings[intent.to_symbol] = (
-            self.holdings.get(intent.to_symbol, 0.0) + (usd * (1 - PAPER_FEE)) / p_to
+            self.holdings.get(intent.to_symbol, 0.0) + received_usd / p_to
         )
         self.holdings = {k: v for k, v in self.holdings.items() if v > 1e-12}
         self.save()

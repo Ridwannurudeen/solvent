@@ -1,8 +1,11 @@
-"""Independent public proof watcher for SOLVENT.
+"""Same-host liveness archiver for SOLVENT's public endpoints.
 
-The watcher is read-only: it fetches public endpoints, summarizes their health,
-and can append a hash-bound attestation JSONL record. It never signs, trades,
-or reads local secrets.
+This is NOT a third-party attestation: it runs on the same VPS, as the same
+user, against the agent's own endpoints, and its records are unsigned and
+operator-writable. It is a convenience archive of public-endpoint health over
+time — independent of the agent *process*, not of the operator. Genuine
+independence requires an off-host verifier. The watcher is read-only: it never
+signs, trades, or reads local secrets.
 """
 
 import argparse
@@ -73,6 +76,9 @@ def public_attestation(
         "schema": "solvent.public-attestation.v1",
         "observed_at": (now or datetime.now(timezone.utc)).isoformat(),
         "public_base": base,
+        # Honest provenance: same-host, unsigned, operator-writable — not a
+        # third-party attestation.
+        "attestor": {"type": "same-host-archive", "independent_of_operator": False},
         "checks": {
             "receipt_chain_ok": verify.get("ok") is True,
             "state_alive": state.get("alive") is True,

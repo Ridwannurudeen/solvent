@@ -33,6 +33,27 @@ def _intent(notional=2.0, to="USDC"):
     )
 
 
+def test_non_executable_symbol_refused_before_broadcast(tmp_path, monkeypatch):
+    # TRX is allowlist-visible but deliberately has no pinned address, so it is
+    # not executable. The executor must refuse before any subprocess call. (#10)
+    ran: list[int] = []
+    monkeypatch.setattr(exec_mod.subprocess, "run", lambda *a, **k: ran.append(1))
+    journal = Journal(tmp_path / "journal.jsonl")
+    intent = TradeIntent(
+        kind=IntentKind.ENTER,
+        from_symbol="USDT",
+        to_symbol="TRX",
+        notional_usd=10.0,
+        reason="held-out symbol",
+    )
+
+    result = TwakExecutor(journal).execute(intent, CYCLE)
+
+    assert not result.ok and result.outcome == "failed"
+    assert ran == []  # never broadcast
+    assert journal.state_of(intent_key(intent, CYCLE)) is None  # no journal entry
+
+
 def _ok_proc(tx="0x" + "ab" * 32):
     return SimpleNamespace(returncode=0, stdout=f'{{"txHash":"{tx}"}}', stderr="")
 

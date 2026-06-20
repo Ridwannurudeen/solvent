@@ -1,14 +1,15 @@
 [Unit]
-Description=SOLVENT watchdog — alert if the decision cycle stops running
+Description=SOLVENT Telegram command bot - read-only ops surface
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-Type=oneshot
 User=solvent
 WorkingDirectory=/opt/solvent
 EnvironmentFile=/opt/solvent/solvent.env
 EnvironmentFile=-/etc/solvent/telegram-alerts
+Environment=SOLVENT_PUBLIC_BASE=https://solvent.gudman.xyz
 # Read-only service: strip signing secrets it never uses (least privilege).
-# (Telegram alert vars are kept so watchdog can still alert.)
 UnsetEnvironment=SOLVENT_PRIVATE_KEY SOLVENT_WALLET_PASSWORD TWAK_WALLET_PASSWORD TWAK_HMAC_SECRET TWAK_ACCESS_ID
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -16,4 +17,9 @@ ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=/opt/solvent
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-ExecStart=/opt/solvent/.venv/bin/python -m solvent.ops.watchdog --data-dir ${SOLVENT_DATA_DIR} --max-age 5400
+ExecStart=/opt/solvent/.venv/bin/python -m solvent.ops.telegram_bot --data-dir /opt/solvent/data-prod --public-base ${SOLVENT_PUBLIC_BASE}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

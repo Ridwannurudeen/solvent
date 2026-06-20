@@ -30,6 +30,13 @@ REQUIRED_LIVE_ENV = (
     "SOLVENT_TRADE_NETWORK",
     "SOLVENT_TWAK_CHAIN",
 )
+# The live execution path signs through the TWAK CLI. These env vars are one
+# valid credential path; TWAK's local auth file + keychain wallet is another.
+REQUIRED_LIVE_TWAK_ENV = (
+    "TWAK_ACCESS_ID",
+    "TWAK_HMAC_SECRET",
+    "TWAK_WALLET_PASSWORD",
+)
 
 
 def load_env_file(path: Path) -> None:
@@ -63,6 +70,9 @@ def _env_status() -> dict:
         "mode": os.environ.get("SOLVENT_MODE", "paper"),
         "required_live": {
             name: bool(os.environ.get(name)) for name in REQUIRED_LIVE_ENV
+        },
+        "required_live_twak": {
+            name: bool(os.environ.get(name)) for name in REQUIRED_LIVE_TWAK_ENV
         },
         "secrets_present": {name: bool(os.environ.get(name)) for name in SECRET_ENV},
         "data_dir": os.environ.get("SOLVENT_DATA_DIR", "/opt/solvent/data"),

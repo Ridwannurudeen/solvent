@@ -2,7 +2,7 @@
 
 > BNB Hack: AI Trading Agent Edition (CoinMarketCap × Trust Wallet × BNB Chain)
 
-An autonomous BNB Smart Chain trading agent whose distinguishing feature is **honesty you can verify**: every decision the agent makes is written as a hash-chained **decision receipt** — what data it bought, what that cost, the regime it inferred, its thesis, the intents it produced, and the resulting transactions. The chain head is anchored on-chain daily under the agent's ERC-8004 identity, so the whole record is tamper-evident and publicly auditable through wallet-signed checkpoints.
+An autonomous BNB Smart Chain trading agent whose distinguishing feature is **honesty you can verify**: every decision the agent makes is written as a hash-chained **decision receipt** — what data it bought, what that cost, the regime it inferred, its thesis, the intents it produced, and the resulting transactions. The chain head is anchored on-chain daily under the agent's ERC-8004 identity, so history up to the last anchor is tamper-evident: anyone can recompute the public log and check the head against the on-chain anchor. (Receipts written after the last daily anchor are recompute-consistent but not yet on-chain-bound.)
 
 **Live BSC mainnet agent:** https://solvent.gudman.xyz — live wallet holdings, equity vs BNB buy-and-hold, current barbell allocation, liveness heartbeat, local chain verification, anchor coverage, mainnet ERC-8004 anchors, and the full receipt stream.
 
@@ -164,7 +164,7 @@ python -m solvent.research.scan_universe --json                   # review-only 
 python -m solvent.commerce.signal --data-dir ./data               # latest signal payload
 ```
 
-Paper mode fills instantly at signal price with a 0.25% fee haircut, seeded with $300 USDT.
+Paper mode fills instantly, seeded with $300 USDT, charging a 0.25% fee, a 0.1% slippage proxy, and a fixed per-trade gas/anchor cost. It still cannot model MEV, route liquidity, price impact, or failed transactions, so live results will be worse than paper.
 `SOLVENT_RISK_PROFILE` selects a named profile (`safety` default, `tournament_50`, `conviction_50`, `tournament_60`) for paper or live runs.
 Set `SOLVENT_ADAPTIVE_PROFILE=1` to let SOLVENT auto-switch between
 `safety` / `conviction_50` / `tournament_60` per cycle based on live
@@ -174,10 +174,21 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 
 ## Status
 
-- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, Binance live price cross-check, receipt hash-chain, raw data response commitments, inference commitments, deterministic inference re-execution verification, signed/anchorable policy manifest generator, Proof-of-Policy verifier/risk passport, independent public watcher attestations with a systemd archive timer, ERC-8183 signal provider, read-only API, ERC-8004 anchors, pre-trade anchors, intent-aware settlement verification, persistent halt latch, atomic local state writes, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), benchmarked strategy-evidence reports, and risk-profile backtests.
+- **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, Binance live price cross-check, receipt hash-chain, raw data response commitments, inference commitments, deterministic inference re-execution verification, signed/anchorable policy manifest generator, Proof-of-Policy verifier/risk passport, a same-host watcher liveness archive (not a third-party attestation) with a systemd timer, ERC-8183 signal provider, read-only API, ERC-8004 anchors, pre-trade anchors, intent-aware settlement verification, persistent halt latch, atomic local state writes, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), benchmarked strategy-evidence reports, and risk-profile backtests.
 - **Live now:** production live-mode rehearsal is running hourly on BSC mainnet from `/opt/solvent/data-prod`; public holdings are read from the funded TWAK wallet; ERC-8004 identity `136384` and receipt-chain anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
 - **Scored-window gate:** the live stack is active before the June 22 trading window; do not present pre-window rehearsal PnL as scored-week PnL. Remaining gates are operational: keep the wallet funded, keep x402 USD1 available, keep watchdog/deadman timers healthy, and publish the repo/demo only after approval.
+
+## Honest limitations
+
+SOLVENT is built to be candid about what it is and is not:
+
+- **Capital preservation, not alpha.** The default `safety` profile keeps ≥75% in stables, so its baseline expected return is near zero by design; the upside is a small momentum sleeve, not a high-return strategy.
+- **Tamper-evidence has a window.** Only history up to the last daily on-chain anchor is bound; receipts in the current (≤24h) window are recompute-consistent but not yet anchored, and comparing the head to the on-chain anchor is a manual step the standalone verifier does not perform.
+- **"Inference verification" is self-consistency, not attestation.** It proves the committed inputs/outputs hash correctly and that the deterministic classifier reconciles — not that a specific model ran or that the inputs were real market data. It is explicitly not a TEE/zk proof.
+- **Thin signals.** The regime read is dominated by Fear & Greed (funding only guards euphoria) and "momentum" is a single trailing-return blend, not a multi-factor model; only price is cross-checked against a second source.
+- **Strategy evidence is illustrative.** The published report runs self-authored synthetic scenarios on a single symbol over a short window, so evidence points can move with scenario choice. It models fees and a per-trade gas cost but not MEV, route liquidity, or price impact — supporting evidence, never a PnL promise.
+- **Single-operator trust on a shared host.** Signing secrets live in the service environment on a shared VPS; systemd sandboxing limits blast radius, but anything running as the same user or root can read them. The watcher is a same-host liveness archive, not an independent attestation.
 
 ## BNB Hack alignment
 

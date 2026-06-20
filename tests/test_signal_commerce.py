@@ -1,6 +1,9 @@
 import json
 from datetime import datetime, timezone
 
+import pytest
+
+from solvent.commerce import server
 from solvent.commerce.signal import SERVICE_ID, build_job_response, build_signal_payload
 from solvent.receipts.chain import ReceiptChain
 
@@ -76,3 +79,20 @@ def test_job_response_is_canonical_json_plus_metadata(tmp_path):
     assert metadata["service"] == SERVICE_ID
     assert metadata["receipt_hash"] == rec.hash
     assert metadata["signal_hash"] == payload["signal_hash"]
+
+
+def test_service_price_rejects_zero(monkeypatch):
+    monkeypatch.setenv("SOLVENT_ERC8183_SERVICE_PRICE", "0")
+    with pytest.raises(RuntimeError, match="must be set > 0"):
+        server._service_price()
+
+
+def test_service_price_rejects_unset(monkeypatch):
+    monkeypatch.delenv("SOLVENT_ERC8183_SERVICE_PRICE", raising=False)
+    with pytest.raises(RuntimeError, match="must be set > 0"):
+        server._service_price()
+
+
+def test_service_price_accepts_positive(monkeypatch):
+    monkeypatch.setenv("SOLVENT_ERC8183_SERVICE_PRICE", "0.05")
+    assert server._service_price() == "0.05"
