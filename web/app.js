@@ -127,6 +127,8 @@ function renderNavStatus(ver) {
   }
   const hh = $("#headHash");
   if (hh) hh.textContent = ver.head_hash;
+  const cs = $("#chainState");
+  if (cs) cs.textContent = ver.ok ? "chain intact ✓" : "chain broken";
 }
 
 function renderHeroMeta(entries, st) {
@@ -146,26 +148,70 @@ function renderHeroMeta(entries, st) {
 function renderTeaser(entries, ver, st) {
   const el = $("#teaser");
   if (!el) return;
-  const last = entries.length ? entries[entries.length - 1].receipt : null;
-  const start =
-    st.start_equity_usd || (entries.length ? entries[0].receipt.equity_usd : 0);
-  const ret = last && start > 0 ? last.equity_usd / start - 1 : null;
+  // Credibility is the audit trail, not PnL: lead with verifiability metrics.
+  const anchors = (st.anchors || []).length;
+  const agentId =
+    st.agent_id != null ? `ERC-8004 #${esc(st.agent_id)}` : "identity pending";
+  const age = st.heartbeat_age_s != null ? humanAge(st.heartbeat_age_s) : "—";
   const cards = [
-    ["Equity (reported)", last ? esc(fmtUsd(last.equity_usd)) : "—", ""],
-    ["Return (reported)", pct(ret), trendClass(ret)],
-    ["Decisions", `${ver.count}`, ""],
+    ["Decision receipts", `${ver.count}`, "", "hash-chained from genesis"],
     [
       "Local chain",
-      ver.ok ? "hash-consistent" : "broken",
+      ver.ok ? "intact" : "broken",
       ver.ok ? "up" : "down",
+      "recompute it yourself",
     ],
+    ["On-chain anchors", `${anchors}`, "", agentId],
+    ["Liveness", age, "", "since last cycle"],
   ];
   el.innerHTML = cards
     .map(
-      ([k, v, c]) =>
-        `<div class="t"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`,
+      ([k, v, c, sub]) =>
+        `<div class="t"><div class="k">${k}</div><div class="v ${c}">${v}<span class="sub">${sub}</span></div></div>`,
     )
     .join("");
+}
+
+function renderReceiptStream(entries) {
+  const el = $("#receiptStream");
+  if (!el) return;
+  const rows = entries.slice(-8).reverse();
+  if (!rows.length) {
+    el.classList.add("static");
+    el.innerHTML = `<div class="rcpt"><span class="seq">—</span><div class="mid"><span class="th">waiting for the live log…</span></div><span class="h"></span></div>`;
+    return;
+  }
+  const row = (e) => {
+    const r = e.receipt;
+    const reg =
+      r.regime === "risk-on" ? "on" : r.regime === "risk-off" ? "off" : "neu";
+    const label = (r.regime || "—").toUpperCase();
+    const th = esc((r.thesis || "").slice(0, 42));
+    const h = e.hash
+      ? `0x<b>${esc(e.hash.slice(2, 8))}</b>…${esc(e.hash.slice(-6))}`
+      : "";
+    return `<div class="rcpt"><span class="seq">#${r.seq}</span><div class="mid"><span class="rg ${reg}">${esc(label)}</span> · <span class="th">${th}</span></div><span class="h">${h}</span></div>`;
+  };
+  const html = rows.map(row).join("");
+  if (rows.length >= 5) {
+    el.classList.remove("static");
+    el.innerHTML = html + html; // duplicate for a seamless marquee loop
+  } else {
+    el.classList.add("static");
+    el.innerHTML = html;
+  }
+}
+
+function renderProofRow(st) {
+  const el = $("#proofRow");
+  if (!el) return;
+  const idSet = st.agent_id != null;
+  const anchors = (st.anchors || []).length;
+  el.innerHTML = `<div class="proof">
+    <div class="pcell"><div class="k">ERC-8004 agent identity</div><div class="a">${idSet ? "#" + esc(st.agent_id) : "identity pending"}</div><div class="s">${anchors} on-chain receipt-chain anchor${anchors === 1 ? "" : "s"} written</div></div>
+    <div class="pcell"><div class="k">Competition registry</div><div class="a">${short(COMPETITION_REGISTRY)}</div><div class="s">BNB Hack entry on BSC mainnet</div></div>
+    <div class="pcell"><div class="k">Execution wallet</div><div class="a">self-custodied</div><div class="s">TWAK keychain · holdings read live on-chain</div></div>
+  </div>`;
 }
 
 function renderStats(entries, ver, st) {
@@ -547,6 +593,8 @@ async function load() {
     $("#errBanner")?.classList.remove("show");
     renderNavStatus(ver);
     renderHeroMeta(entries, st);
+    renderReceiptStream(entries);
+    renderProofRow(st);
     renderTeaser(entries, ver, st);
     renderStats(entries, ver, st);
     renderAlloc(entries, st);
