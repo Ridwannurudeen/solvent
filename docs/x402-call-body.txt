@@ -1,1 +1,0 @@
-{"resource":"X402_get_global_metrics_latest","error":"Provide PAYMENT-SIGNATURE header to pay and retry."}

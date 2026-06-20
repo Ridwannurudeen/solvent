@@ -8,9 +8,27 @@ An autonomous BNB Smart Chain trading agent whose distinguishing feature is **ho
 
 Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state) · [`/policy`](https://solvent.gudman.xyz/policy) · [`/policy-compliance`](https://solvent.gudman.xyz/policy-compliance) · [`/passport`](https://solvent.gudman.xyz/passport) · [`/signal`](https://solvent.gudman.xyz/signal) · [`/inference-commitments`](https://solvent.gudman.xyz/inference-commitments) · [`/inference-verification`](https://solvent.gudman.xyz/inference-verification) · [`/strategy-evidence`](https://solvent.gudman.xyz/strategy-evidence)
 
-Submission evidence packet: [`EVIDENCE.md`](EVIDENCE.md)
-Live cutover checklist: [`LIVE_CUTOVER.md`](LIVE_CUTOVER.md)
-Submission packet: [`SUBMISSION_PACKET.md`](SUBMISSION_PACKET.md)
+> Deep-dive docs (submission packet, evidence, runbook, plan) live in [`docs/`](docs/).
+
+---
+
+## Contents
+
+- [Why a glass box](#why-a-glass-box)
+- [Architecture](#architecture)
+- [Strategy — the barbell](#strategy--the-barbell-all-values-in-kernelrulespy)
+- [Decision receipts — and how to verify them](#decision-receipts--and-how-to-verify-them)
+- [Inference commitments & ERC-8183 signal sales](#inference-commitments-and-erc-8183-signal-sales)
+- [Strategy evidence](#strategy-evidence-not-guaranteed-alpha)
+- [Policy manifest](#policy-manifest)
+- [ERC-8004 on-chain anchoring](#erc-8004-on-chain-anchoring)
+- [Data & x402 spend metering](#data--x402-spend-metering)
+- [Run it](#run-it)
+- [Status](#status)
+- [Honest limitations](#honest-limitations)
+- [BNB Hack alignment](#bnb-hack-alignment)
+- [Documentation](#documentation)
+- [License](#license)
 
 ---
 
@@ -215,3 +233,20 @@ SOLVENT is built to be candid about what it is and is not:
 | Originality | glass-box receipts + ERC-8004 trading identity — an agent a self-custody user can actually audit |
 | CMC Agent Hub | multi-endpoint signals with per-decision cost metering |
 | BNB AI Agent SDK | ERC-8004 identity + daily/on-demand receipt anchors + ERC-8183 signal sales |
+
+## Documentation
+
+| Doc | What it covers |
+|---|---|
+| [`docs/PLAN.md`](docs/PLAN.md) | Master plan: objectives, strategy spec, phase schedule, risk register |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Go-live runbook — verified step-by-step cutover commands |
+| [`docs/LIVE_CUTOVER.md`](docs/LIVE_CUTOVER.md) | Live-mode cutover checklist |
+| [`docs/EVIDENCE.md`](docs/EVIDENCE.md) | Submission evidence packet (on-chain proofs, endpoints) |
+| [`docs/SUBMISSION.md`](docs/SUBMISSION.md) · [`docs/SUBMISSION_PACKET.md`](docs/SUBMISSION_PACKET.md) | DoraHacks submission draft + packet |
+| [`docs/BNB_HACK_ALIGNMENT.md`](docs/BNB_HACK_ALIGNMENT.md) | Detailed requirement-by-requirement alignment |
+| [`docs/DEMO.md`](docs/DEMO.md) | Demo-video shot-by-shot script |
+| [`AI_USAGE.md`](AI_USAGE.md) | AI-tooling usage disclosure |
+
+## License
+
+Released under the [MIT License](LICENSE).
