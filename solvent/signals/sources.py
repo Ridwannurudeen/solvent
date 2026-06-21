@@ -414,9 +414,12 @@ class CrossCheckedSource:
                     continue
                 secondary_score = secondary_signals.momentum.get(symbol)
                 if secondary_score is None or secondary_score <= 0:
+                    # Unconfirmed momentum: drop the token from entry
+                    # candidates. This is a normal per-token source
+                    # disagreement, not a data outage, so it must not
+                    # degrade the whole cycle (degradation is reserved for
+                    # primary-degraded / price-deviation / missing secondary).
                     momentum.pop(symbol, None)
-                    if self.require_secondary:
-                        degraded = True
                     continue
                 momentum[symbol] = min(primary_score, secondary_score)
 

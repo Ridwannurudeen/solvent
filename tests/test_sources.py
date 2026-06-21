@@ -254,7 +254,7 @@ def test_cross_checked_source_clamps_momentum_to_confirmed_score():
     assert signals.momentum["CAKE"] == 3.0
 
 
-def test_cross_checked_source_degrades_on_unconfirmed_positive_momentum():
+def test_cross_checked_source_drops_unconfirmed_positive_momentum_without_degrading():
     primary = StaticSource(
         MarketSignals(
             fear_greed=60,
@@ -276,5 +276,7 @@ def test_cross_checked_source_degrades_on_unconfirmed_positive_momentum():
 
     signals, _ = CrossCheckedSource(primary, secondary).fetch()
 
-    assert signals.degraded is True
+    # Unconfirmed momentum drops the token from entry candidates but is a
+    # normal per-token source disagreement, not a data outage.
+    assert signals.degraded is False
     assert "CAKE" not in signals.momentum
