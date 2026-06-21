@@ -4,7 +4,7 @@
 
 An autonomous BNB Smart Chain trading agent whose distinguishing feature is **honesty you can verify**: every decision the agent makes is written as a hash-chained **decision receipt** — what data it bought, what that cost, the regime it inferred, its thesis, the intents it produced, and the resulting transactions. The chain head is anchored on-chain daily under the agent's ERC-8004 identity, so history up to the last anchor is tamper-evident: anyone can recompute the public log and check the head against the on-chain anchor. (Receipts written after the last daily anchor are recompute-consistent but not yet on-chain-bound.)
 
-**Live BSC mainnet agent:** https://solvent.gudman.xyz — live wallet holdings, equity vs BNB buy-and-hold, current barbell allocation, liveness heartbeat, local chain verification, anchor coverage, mainnet ERC-8004 anchors, and the full receipt stream.
+**Live BSC mainnet agent:** https://solvent.gudman.xyz — equity vs BNB buy-and-hold, receipt-derived allocation, liveness heartbeat, local chain verification, anchor coverage, mainnet ERC-8004 anchors, and the receipt stream. Public `/state` redacts wallet holdings and open-position details; receipts and policy endpoints carry the verifier-facing evidence.
 
 Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](https://solvent.gudman.xyz/verify) · [`/state`](https://solvent.gudman.xyz/state) · [`/policy`](https://solvent.gudman.xyz/policy) · [`/policy-compliance`](https://solvent.gudman.xyz/policy-compliance) · [`/passport`](https://solvent.gudman.xyz/passport) · [`/signal`](https://solvent.gudman.xyz/signal) · [`/inference-commitments`](https://solvent.gudman.xyz/inference-commitments) · [`/inference-verification`](https://solvent.gudman.xyz/inference-verification) · [`/strategy-evidence`](https://solvent.gudman.xyz/strategy-evidence)
 
@@ -36,7 +36,7 @@ Public API: [`/receipts`](https://solvent.gudman.xyz/receipts) · [`/verify`](ht
 
 A self-custody user can't audit a black-box trader — they just have to trust it. SOLVENT inverts that: the agent emits a receipt every cycle and anchors the log on-chain, so anyone can pull the public log, recompute the hash chain, and check the head against the on-chain anchor. Nobody else in the field is doing decision receipts + an ERC-8004 trading identity; that's the originality lead.
 
-The default trading strategy is a disciplined **barbell** built to stay alive through a drawdown-DQ tournament (≥1 trade/day, 30% trailing-drawdown disqualification) while keeping convex upside if the momentum sleeve catches a move. The repo also includes a research-tested `conviction_50` profile for the scored window; it is not activated unless `SOLVENT_RISK_PROFILE=conviction_50` is explicitly set.
+The code default is a disciplined **safety** barbell built to stay alive through a drawdown-DQ tournament (≥1 trade/day, 30% trailing-drawdown disqualification). The repo also includes a research-tested `conviction_50` profile for the scored window; it is activated only when `SOLVENT_RISK_PROFILE=conviction_50` is explicitly set and should be treated as the live risk posture if receipts/policy show that profile.
 
 ## Architecture
 
@@ -74,8 +74,8 @@ The cardinal rule: **the kernel is pure and deterministic.** The LLM advisor can
 
 ## Strategy — the barbell (all values in `kernel/rules.py`)
 
-- **Floor:** ≥ **75%** of equity stays in floor stables (`floor_frac_min = 0.75`) at all times; floor assets are conservatively marked at `min(reference price, $1)` minus the configured stable haircut.
-- **Sleeve:** at most **one** concurrent position (`max_positions = 1`), target **22%** of equity (`sleeve_frac_target = 0.22`), rotated into the single highest-momentum *executable* allowlist token above an entry bar.
+- **Safety floor:** under the code-default `safety` profile, ≥ **75%** of equity stays in floor stables (`floor_frac_min = 0.75`) at all times; floor assets are conservatively marked at `min(reference price, $1)` minus the configured stable haircut.
+- **Safety sleeve:** at most **one** concurrent position (`max_positions = 1`), target **22%** of equity (`sleeve_frac_target = 0.22`), rotated into the single highest-momentum *executable* allowlist token above an entry bar.
 - **Entry gate:** flat **and** regime is `risk-on` **and** a candidate clears `MIN_ENTRY_MOMO`. Regime is classified conservatively from Fear & Greed + funding; missing or cross-source-divergent data downgrades the regime.
 - **Per-position protection:** hard stop at **−12%** from entry (`stop_pct`), plus a momentum-decay exit when the score falls below **50%** of its entry value.
 - **Lock-in ratchet** (anti peak-drawdown DQ): after banked gains the sleeve cap tightens — **≥10% → 15%**, **≥20% → 10%**, **≥35% → 5%** — so winnings are de-risked into the floor rather than ridden back down.
@@ -161,7 +161,7 @@ SOLVENT_ANCHOR_BACKEND=twak SOLVENT_BSC_NETWORK=bsc-mainnet SOLVENT_AGENT_ID=...
 
 ## Data & x402 spend metering
 
-Signals come from the data layer (paper mode: free Binance tickers + alternative.me Fear & Greed; live mode: CoinMarketCap x402 primary data with Binance public REST as an independent price cross-check). Every paid call is recorded in the receipt's `data_purchases` with its USD cost, response hash, and response byte count; a daily durable spend ledger plus per-call cap live in `RiskConfig` (`x402_session_budget_usdc`, `x402_max_per_call_usdc`). The point is honest metering surfaced per decision — not a performance claim. On BSC, SOLVENT prefers CMC's USD1 EIP-3009 offer because BSC USDC is currently permit2-only.
+Signals come from the data layer (paper mode: free Binance tickers + alternative.me Fear & Greed; live mode: CoinMarketCap x402 primary data with Binance public REST as an independent price and momentum cross-check). Every paid call is recorded in the receipt's `data_purchases` with its USD cost, response hash, and response byte count; a daily durable spend ledger plus per-call cap live in `RiskConfig` (`x402_session_budget_usdc`, `x402_max_per_call_usdc`). The point is honest metering surfaced per decision — not a performance claim. SOLVENT prefers CMC's Base USDC EIP-3009 offer; the BSC rails remain fallback only.
 
 ## Run it
 
@@ -195,7 +195,7 @@ The Claude regime advisor is **opt-in** (`SOLVENT_USE_ADVISOR=1`) — off by def
 - **Built + tested:** deterministic kernel, paper execution loop, live TWAK/CMC stack, Binance live price cross-check, receipt hash-chain, raw data response commitments, inference commitments, deterministic inference re-execution verification, signed/anchorable policy manifest generator, Proof-of-Policy verifier/risk passport, a same-host watcher liveness archive (not a third-party attestation) with a systemd timer, ERC-8183 signal provider, read-only API, ERC-8004 anchors, pre-trade anchors, intent-aware settlement verification, persistent halt latch, atomic local state writes, opt-in regime advisor, adaptive profile mode, ops armor (deadman + watchdog + systemd units), benchmarked strategy-evidence reports, and risk-profile backtests.
 - **Live now:** production live-mode rehearsal is running hourly on BSC mainnet from `/opt/solvent/data-prod`; public holdings are read from the funded TWAK wallet; ERC-8004 identity `136384` and receipt-chain anchors are live on BSC mainnet.
 - **Allowlist gate:** 22 sleeve majors + 5 floor stables have pinned, source-verified BSC contracts; `TRX` and `TON` are deliberately held out (ambiguous / thin-liquidity resolution) until confirmed.
-- **Scored-window gate:** the live stack is active before the June 22 trading window; do not present pre-window rehearsal PnL as scored-week PnL. Remaining gates are operational: keep the wallet funded, keep x402 USD1 available, keep watchdog/deadman timers healthy, and publish the repo/demo only after approval.
+- **Scored-window gate:** the live stack is active before the June 22 trading window; do not present pre-window rehearsal PnL as scored-week PnL. Remaining gates are operational: keep the wallet funded, keep Base USDC for x402 available, keep watchdog/deadman timers healthy, and publish the repo/demo only after approval.
 
 ## Honest limitations
 

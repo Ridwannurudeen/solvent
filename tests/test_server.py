@@ -7,9 +7,12 @@ from solvent.receipts.server import (
     inference_commitments,
     inference_proofs,
     inference_verification,
+    load_entry_page,
     load_entries,
+    load_recent_entries,
     policy_compliance,
     policy_manifest,
+    public_state,
     state,
     strategy_evidence,
     summary,
@@ -52,6 +55,19 @@ def test_load_and_verify(tmp_path):
     assert v["ok"] is True
     assert v["count"] == 2
     assert v["head_hash"] == entries[-1]["hash"]
+
+
+def test_public_receipt_helpers_are_bounded(tmp_path):
+    p = tmp_path / "receipts.jsonl"
+    chain = ReceiptChain(p)
+    for i in range(3):
+        chain.append(ts=f"2026-06-24T1{i}:00:00+00:00", regime="risk-off")
+
+    recent = load_recent_entries(p, limit=2)
+    page = load_entry_page(p, start=1, limit=1)
+
+    assert [entry["receipt"]["seq"] for entry in recent] == [1, 2]
+    assert [entry["receipt"]["seq"] for entry in page] == [1]
 
 
 def test_summary_reports_latest(tmp_path):
@@ -239,6 +255,31 @@ def test_state_reports_holdings_and_liveness(tmp_path):
     assert s["holdings_error"] is None
     assert s["alive"] is True
     assert s["heartbeat_age_s"] is not None and s["heartbeat_age_s"] < 60
+
+
+def test_public_state_redacts_holdings_and_position(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_MODE", "live")
+    (tmp_path / "state.json").write_text(
+        json.dumps(
+            {
+                "start_equity_usd": 300.0,
+                "peak_equity_usd": 312.0,
+                "position": {"symbol": "CAKE", "notional_usd": 60.0},
+            }
+        )
+    )
+    (tmp_path / "live-holdings.json").write_text(
+        json.dumps({"ts": "2026-06-24T12:00:00+00:00", "holdings": {"USDT": 40.0}})
+    )
+
+    s = public_state(tmp_path)
+
+    assert "start_equity_usd" not in s
+    assert "peak_equity_usd" not in s
+    assert "position" not in s
+    assert "holdings" not in s
+    assert s["holdings_source"] == "redacted"
+    assert s["private_state_redacted"] is True
 
 
 def test_state_reads_live_holdings_when_live_and_no_paper_file(tmp_path, monkeypatch):

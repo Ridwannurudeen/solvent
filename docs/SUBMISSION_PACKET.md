@@ -97,12 +97,13 @@ of statistically proven or guaranteed alpha.
 
 ## Strategy Explanation
 
-SOLVENT uses a barbell portfolio designed for a live PnL tournament with a
-drawdown gate:
+SOLVENT uses a policy-selected barbell portfolio designed for a live PnL
+tournament with a drawdown gate:
 
-- At least 75% of equity stays in in-scope BSC stables, conservatively marked
-  with a stable haircut instead of assuming every unit is exactly $1.
-- A single momentum sleeve can use about 22% of equity.
+- The code-default `safety` profile keeps at least 75% of equity in in-scope BSC
+  stables and uses a single sleeve around 22% of equity.
+- The explicit `conviction_50` profile uses a 50% stable floor, 48% sleeve
+  target, 8% hard stop, 10.0 momentum entry bar, and 48h minimum hold.
 - Entries require risk-on regime plus executable token momentum.
 - Stops, slippage, token allowlist, per-trade sizing, and daily trade limits are
   deterministic.
@@ -111,12 +112,9 @@ drawdown gate:
   latches `HALTED` until explicit operator resume.
 - A deadman path can fire a small stable-to-stable rotation to satisfy the daily
   trade requirement when the runtime is not persistently halted.
-- CMC prices are checked against Binance; divergence or secondary-source failure
-  degrades the cycle and prevents new risk.
-- A researched `conviction_50` profile is available for the live competition:
-  50% stable floor, 48% maximum sleeve, 8% hard stop, 10.0 momentum entry bar,
-  and 48h minimum hold before momentum-decay exits. It is activated only by
-  explicit runtime profile selection.
+- CMC prices and positive momentum are checked against Binance; divergence,
+  unconfirmed positive momentum, or secondary-source failure degrades the cycle
+  and prevents new risk.
 - Money-moving intents produce a pre-trade commit receipt before execution and
   an execution seal after the result. Production proof mode publishes the
   pre-trade commit hash to ERC-8004 before the TWAK swap. A swap is not marked

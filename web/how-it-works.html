@@ -35,20 +35,21 @@
   <section class="section">
     <div class="prose">
       <h2>The barbell strategy</h2>
-      <p>The agent runs a <b>barbell</b>: the large majority of equity stays in stablecoins as a hard floor, while a small concentrated sleeve rotates into the single strongest-momentum token. It is built to stay alive through a drawdown-disqualification tournament, not to chase the top of the leaderboard.</p>
+      <p>The agent runs a <b>barbell</b>: floor stables protect capital while one concentrated sleeve rotates into the single strongest confirmed-momentum token. The selected policy profile sets the exact floor and sleeve size.</p>
       <ul>
-        <li><b>Floor first.</b> At least 75% of equity is always in floor stables.</li>
-        <li><b>One concentrated sleeve.</b> At most one position, sized to ~22% of equity, entered only on a confirmed risk-on regime and positive momentum.</li>
-        <li><b>Cut losers fast.</b> A hard −12% stop, plus a momentum-decay exit when a position's strength falls below half its entry score.</li>
+        <li><b>Floor first.</b> The safety profile keeps at least 75% in floor stables; explicit scored-window profiles can lower that only through the policy manifest.</li>
+        <li><b>One concentrated sleeve.</b> At most one position, sized by the selected profile, entered only on a confirmed risk-on regime and cross-checked positive momentum.</li>
+        <li><b>Cut losers fast.</b> A hard stop plus profile-specific exit rules prevent passive exposure.</li>
         <li><b>Bank winners.</b> A lock-in ratchet tightens the sleeve cap as gains accrue, de-risking into the floor rather than riding it back down.</li>
         <li><b>Stay qualified.</b> A deadman path fires a tiny stablecoin rotation if no trade has happened by the daily deadline, satisfying the one-trade-per-day rule even with every data feed down.</li>
       </ul>
     </div>
     <div class="card spec" style="margin-top:18px">
-      <div class="row"><span class="l">Floor minimum</span><span class="v">75%</span></div>
-      <div class="row"><span class="l">Sleeve target</span><span class="v">22%</span></div>
+      <div class="row"><span class="l">Safety floor minimum</span><span class="v">75%</span></div>
+      <div class="row"><span class="l">Safety sleeve target</span><span class="v">22%</span></div>
+      <div class="row"><span class="l">Conviction floor / sleeve</span><span class="v">50% / 48%</span></div>
       <div class="row"><span class="l">Max concurrent positions</span><span class="v">1</span></div>
-      <div class="row"><span class="l">Hard stop</span><span class="v">−12%</span></div>
+      <div class="row"><span class="l">Hard stop</span><span class="v">12% safety / 8% conviction</span></div>
       <div class="row"><span class="l">Kill switch (trailing DD)</span><span class="v">22%</span></div>
       <div class="row"><span class="l">DQ threshold</span><span class="v">30%</span></div>
       <div class="row"><span class="l">Max trades / day</span><span class="v">6</span></div>

@@ -30,6 +30,7 @@ from ..exec.executor import (
     intent_key,
     intent_payload,
 )
+from ..exec.networks import resolve_twak_chain
 from ..kernel.allocator import IntentKind, TradeIntent
 from ..kernel.rules import RiskConfig
 from ..receipts.chain import ReceiptChain
@@ -145,11 +146,15 @@ def make_executor(mode: str, journal: Journal, cfg: RiskConfig):
     if mode == "paper":
         return PaperExecutor(journal)
     receipt_verifier = None
+    network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+    try:
+        twak_chain = resolve_twak_chain(network, os.environ.get("SOLVENT_TWAK_CHAIN"))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     wallet_address = os.environ.get("SOLVENT_WALLET_ADDRESS")
     if wallet_address:
         from ..exec.livebook import LiveBook, LiveReceiptVerifier, make_web3
 
-        network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
         book = LiveBook(make_web3(network), wallet_address)
         receipt_verifier = LiveReceiptVerifier(
             book,
@@ -160,7 +165,7 @@ def make_executor(mode: str, journal: Journal, cfg: RiskConfig):
     return TwakExecutor(
         journal,
         password=os.environ.get("TWAK_WALLET_PASSWORD"),
-        chain=os.environ.get("SOLVENT_TWAK_CHAIN", "bsc"),
+        chain=twak_chain,
         slippage_pct=cfg.max_slippage_pct,
         receipt_verifier=receipt_verifier,
         balance_reader=receipt_verifier.before if receipt_verifier else None,

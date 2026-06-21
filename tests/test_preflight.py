@@ -65,3 +65,25 @@ def test_preflight_reports_missing_wallet_address(tmp_path, monkeypatch):
 
     assert report["env"]["required_live"]["SOLVENT_PRIVATE_KEY"] is True
     assert report["env"]["required_live"]["SOLVENT_WALLET_ADDRESS"] is False
+
+
+def test_preflight_derives_testnet_twak_chain(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-testnet")
+    monkeypatch.delenv("SOLVENT_TWAK_CHAIN", raising=False)
+
+    report = preflight(tmp_path, include_twak=False)
+
+    assert report["env"]["twak_chain"]["configured"] is False
+    assert report["env"]["twak_chain"]["effective"] == "bsctestnet"
+    assert report["env"]["twak_chain"]["matches_trade_network"] is True
+
+
+def test_preflight_reports_twak_chain_mismatch(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-testnet")
+    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+
+    report = preflight(tmp_path, include_twak=False)
+
+    assert report["env"]["twak_chain"]["effective"] is None
+    assert report["env"]["twak_chain"]["matches_trade_network"] is False
+    assert "does not match" in report["env"]["twak_chain"]["error"]

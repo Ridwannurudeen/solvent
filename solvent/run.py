@@ -21,6 +21,7 @@ from pathlib import Path
 from .brain.advisor import make_advisor
 from .engine import StateStore, run_cycle
 from .exec.executor import Journal, PaperExecutor
+from .exec.networks import resolve_twak_chain
 from .kernel.rules import RiskConfig, risk_config_for_profile
 from .kernel.state import MarketSignals, PortfolioState
 from .ops.alerts import alert
@@ -180,7 +181,7 @@ def build_live(data_dir: Path, cfg: RiskConfig):
     Optional env:
       TWAK_WALLET_PASSWORD     TWAK signing password; otherwise keychain fallback
       SOLVENT_TRADE_NETWORK    bsc-mainnet (default) | bsc-testnet
-      SOLVENT_TWAK_CHAIN       TWAK chain name (default: bsc)
+      SOLVENT_TWAK_CHAIN       optional TWAK chain name; derived from trade network
     """
     from bnbagent.signing import SigningPolicy
     from bnbagent.wallets import EVMWalletProvider
@@ -202,7 +203,10 @@ def build_live(data_dir: Path, cfg: RiskConfig):
     wallet_address = _require("SOLVENT_WALLET_ADDRESS")
     twak_password = os.environ.get("TWAK_WALLET_PASSWORD")
     network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
-    twak_chain = os.environ.get("SOLVENT_TWAK_CHAIN", "bsc")
+    try:
+        twak_chain = resolve_twak_chain(network, os.environ.get("SOLVENT_TWAK_CHAIN"))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     # x402 signer: only the known CMC payment-token domains may be signed, with
     # the per-call cap and session budget from RiskConfig, scaled to each
@@ -212,6 +216,7 @@ def build_live(data_dir: Path, cfg: RiskConfig):
             (int(net.split(":")[1]), asset) for (net, asset) in TOKEN_DECIMALS
         ),
         primary_type_allowlist=frozenset({"TransferWithAuthorization"}),
+        validity_required_primary_types=frozenset({"TransferWithAuthorization"}),
     )
     wallet = EVMWalletProvider(
         password=wallet_password,

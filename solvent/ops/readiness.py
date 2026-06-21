@@ -327,6 +327,15 @@ def _preflight_checks(report: dict, profile: str) -> list[dict]:
             required=profile == "live",
         )
     )
+    twak_chain = report["env"].get("twak_chain", {})
+    checks.append(
+        _check(
+            "live_twak_chain_matches_trade_network",
+            bool(twak_chain.get("matches_trade_network")),
+            twak_chain.get("error") or f"effective={twak_chain.get('effective')}",
+            required=profile == "live",
+        )
+    )
     checks.append(
         _check(
             "live_data_dir_isolated",

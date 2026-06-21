@@ -23,6 +23,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..exec.networks import twak_chain_for_network
 from ..ops.alerts import alert
 from ..ops.files import atomic_write_text
 from .chain import GENESIS_HASH, ReceiptChain
@@ -61,12 +62,7 @@ def _agent_id(payload: dict) -> int:
 
 
 def _twak_chain(network: str) -> str:
-    return {
-        "bsc": "bsc",
-        "bsc-mainnet": "bsc",
-        "bsctestnet": "bsctestnet",
-        "bsc-testnet": "bsctestnet",
-    }.get(network, network)
+    return twak_chain_for_network(network)
 
 
 class TwakRegistry:

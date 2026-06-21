@@ -65,9 +65,9 @@ TWAK_HMAC_SECRET=...
 Send the rehearsal stake to the Step-1 address on **BSC mainnet**:
 - ~$50 in a floor stable (USDT) for the rehearsal; top up to ~$300 for the scored week.
 - ~$5 of BNB for gas (swaps cost ~$0.006 each; the binding cost is the ~0.25% DEX fee).
-- A small BSC USD1 balance on the x402 signing wallet for paid CMC calls. The
-  CMC MCP challenge offers BSC EIP-3009 settlement in USD1; Binance-Peg USDC on
-  BSC is currently permit2-only, which SOLVENT does not sign.
+- A small Base USDC balance on the x402 signing wallet for paid CMC calls, plus
+  a little Base ETH for gas. The CMC MCP challenge settles reliably on Base
+  USDC; the BSC x402 rails are kept as fallback only.
 
 ```bash
 sudo -u solvent -H twak wallet balance --chain bsc    # confirm funds landed
@@ -129,7 +129,8 @@ SOLVENT_PRETRADE_ANCHOR=1
 SOLVENT_PRIVATE_KEY=0x...
 SOLVENT_WALLET_PASSWORD=...
 SOLVENT_TRADE_NETWORK=bsc-mainnet
-SOLVENT_TWAK_CHAIN=bsc
+# Optional; derived as bsc from SOLVENT_TRADE_NETWORK and rejected if mismatched.
+# SOLVENT_TWAK_CHAIN=bsc
 SOLVENT_WALLET_ADDRESS=0xE4fe23FB57dbb9AC2f685ea29B6b9A1409A0d359
 # (TWAK auth/wallet already configured from Step 1; TWAK_WALLET_PASSWORD is
 # optional when the `solvent` user's keychain is available)
@@ -139,10 +140,10 @@ Live mode refuses to start against a data directory containing
 `paper-holdings.json`, unless `SOLVENT_ALLOW_LIVE_SHARED_DATA=1` is explicitly
 set. Do not set that override for the competition.
 
-`SOLVENT_RISK_PROFILE=safety` is the unchanged default. The researched
-competition profile is `conviction_50`, but switching to it changes real-money
-sizing and should be done only as an explicit cutover decision before the
-scored window.
+`SOLVENT_RISK_PROFILE=safety` is the code default. The researched competition
+profile is `conviction_50`; switching to it changes real-money sizing and
+should be an explicit scored-window posture decision before the policy manifest
+is frozen.
 
 `SOLVENT_PRETRADE_ANCHOR=1` adds an ERC-8004 metadata tx before each TWAK swap.
 Production proof mode enables it so the pre-trade commit is on-chain before

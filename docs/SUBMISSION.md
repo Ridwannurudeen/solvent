@@ -36,15 +36,15 @@ SOLVENT is a glass-box BSC trading agent: it reads CMC market data, decides unde
 
 ## Strategy
 
-SOLVENT uses a barbell structure built for the live PnL week:
+SOLVENT uses a policy-selected barbell structure built for the live PnL week:
 
-- 75%+ floor reserve in in-scope BSC stables, marked conservatively with a stable haircut.
-- One momentum sleeve capped around 22% of equity.
+- Code-default `safety`: 75%+ floor reserve in in-scope BSC stables and one momentum sleeve capped around 22% of equity.
+- Explicit `conviction_50` posture: 50% floor, 48% sleeve target, 8% hard stop, 10.0 momentum entry bar, and 48h minimum hold.
 - Deterministic entry, exit, stop, slippage, token allowlist, and drawdown rules.
 - Lock-in ratchet that shrinks the sleeve after gains.
 - Kill switch before the competition drawdown disqualification threshold, latched until explicit operator resume.
 - Deadman qualification path to satisfy the daily trade requirement when the runtime is not persistently halted.
-- CMC x402 prices are cross-checked against Binance public REST; divergence marks the cycle degraded.
+- CMC x402 prices and positive momentum are cross-checked against Binance public REST; divergence or unconfirmed positive momentum marks the cycle degraded.
 
 The advisor layer is optional and can only de-risk; it cannot force or enlarge a trade.
 

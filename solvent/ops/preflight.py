@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..exec.executor import Journal
+from ..exec.networks import resolve_twak_chain
 from .watchdog import heartbeat_age
 
 SECRET_ENV = (
@@ -28,7 +29,6 @@ REQUIRED_LIVE_ENV = (
     "SOLVENT_WALLET_PASSWORD",
     "SOLVENT_WALLET_ADDRESS",
     "SOLVENT_TRADE_NETWORK",
-    "SOLVENT_TWAK_CHAIN",
 )
 # The live execution path signs through the TWAK CLI. These env vars are one
 # valid credential path; TWAK's local auth file + keychain wallet is another.
@@ -66,10 +66,26 @@ def _run(cmd: list[str], timeout: int = 30) -> dict:
 
 
 def _env_status() -> dict:
+    trade_network = os.environ.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+    configured_twak_chain = os.environ.get("SOLVENT_TWAK_CHAIN")
+    try:
+        effective_twak_chain = resolve_twak_chain(trade_network, configured_twak_chain)
+        twak_chain_ok = True
+        twak_chain_error = None
+    except ValueError as exc:
+        effective_twak_chain = None
+        twak_chain_ok = False
+        twak_chain_error = str(exc)
     return {
         "mode": os.environ.get("SOLVENT_MODE", "paper"),
         "required_live": {
             name: bool(os.environ.get(name)) for name in REQUIRED_LIVE_ENV
+        },
+        "twak_chain": {
+            "configured": bool(configured_twak_chain),
+            "effective": effective_twak_chain,
+            "matches_trade_network": twak_chain_ok,
+            "error": twak_chain_error,
         },
         "required_live_twak": {
             name: bool(os.environ.get(name)) for name in REQUIRED_LIVE_TWAK_ENV
@@ -93,8 +109,9 @@ def _anchors(data_dir: Path) -> dict:
 def preflight(data_dir: Path, include_twak: bool = True) -> dict:
     journal = Journal(data_dir / "journal.jsonl")
     age = heartbeat_age(data_dir)
+    env = _env_status()
     report = {
-        "env": _env_status(),
+        "env": env,
         "paper_data_in_dir": (data_dir / "paper-holdings.json").exists(),
         "heartbeat_age_s": age,
         "journal_has_unresolved": journal.has_unresolved(),
@@ -104,13 +121,14 @@ def preflight(data_dir: Path, include_twak: bool = True) -> dict:
         "anchors": _anchors(data_dir),
     }
     if include_twak:
+        twak_chain = env["twak_chain"]["effective"] or "bsc"
         report["twak"] = {
             "auth_status": _run(["twak", "auth", "status", "--json"]),
             "wallet_address": _run(
-                ["twak", "wallet", "address", "--chain", "bsc", "--json"]
+                ["twak", "wallet", "address", "--chain", twak_chain, "--json"]
             ),
             "wallet_balance": _run(
-                ["twak", "wallet", "balance", "--chain", "bsc", "--json"]
+                ["twak", "wallet", "balance", "--chain", twak_chain, "--json"]
             ),
         }
     return report

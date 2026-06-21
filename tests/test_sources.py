@@ -226,3 +226,55 @@ def test_cross_checked_source_degrades_on_price_divergence():
 
     assert signals.degraded is True
     assert signals.source_deviation_pct["CAKE"] == 25.0
+
+
+def test_cross_checked_source_clamps_momentum_to_confirmed_score():
+    primary = StaticSource(
+        MarketSignals(
+            fear_greed=60,
+            btc_funding_rate=0.0001,
+            prices={"CAKE": 2.50},
+            momentum={"CAKE": 8.0},
+            degraded=False,
+        )
+    )
+    secondary = StaticSource(
+        MarketSignals(
+            fear_greed=None,
+            btc_funding_rate=None,
+            prices={"CAKE": 2.50},
+            momentum={"CAKE": 3.0},
+            degraded=False,
+        )
+    )
+
+    signals, _ = CrossCheckedSource(primary, secondary).fetch()
+
+    assert signals.degraded is False
+    assert signals.momentum["CAKE"] == 3.0
+
+
+def test_cross_checked_source_degrades_on_unconfirmed_positive_momentum():
+    primary = StaticSource(
+        MarketSignals(
+            fear_greed=60,
+            btc_funding_rate=0.0001,
+            prices={"CAKE": 2.50},
+            momentum={"CAKE": 8.0},
+            degraded=False,
+        )
+    )
+    secondary = StaticSource(
+        MarketSignals(
+            fear_greed=None,
+            btc_funding_rate=None,
+            prices={"CAKE": 2.50},
+            momentum={"CAKE": 0.0},
+            degraded=False,
+        )
+    )
+
+    signals, _ = CrossCheckedSource(primary, secondary).fetch()
+
+    assert signals.degraded is True
+    assert "CAKE" not in signals.momentum

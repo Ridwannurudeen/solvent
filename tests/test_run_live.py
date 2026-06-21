@@ -25,7 +25,19 @@ def test_build_live_assembles_real_components(tmp_path, monkeypatch):
     assert isinstance(source.primary, CMCSource)
     assert isinstance(executor, TwakExecutor)
     assert isinstance(book, LiveBook)
-    assert executor.chain == "bsc"  # default TWAK chain
+    assert executor.chain == "bsctestnet"
+
+
+def test_build_live_rejects_trade_network_twak_chain_mismatch(
+    tmp_path, monkeypatch
+):
+    from solvent.kernel.rules import RiskConfig
+
+    _set_live_env(monkeypatch)
+    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+
+    with pytest.raises(SystemExit, match="does not match"):
+        build_live(tmp_path, RiskConfig())
 
 
 @pytest.mark.parametrize(

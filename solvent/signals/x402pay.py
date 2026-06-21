@@ -21,6 +21,7 @@ return "X402 submit error" — so Base USDC is preferred.
 import base64
 import hashlib
 import json
+import math
 import os
 import secrets
 import time
@@ -46,6 +47,12 @@ TOKEN_DECIMALS = {
 BSC_USD1 = "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d"
 BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 BSC_UNITED_STABLES = "0xcE24439F2D9C6a2289F741120FE202248B666666"
+CMC_X402_PAY_TO = "0x3C5f3a6cE224BB89D72f5EB4232ecC27F67B3eeA"
+MAX_PAYMENT_TIMEOUT_SECONDS = 300
+PAYEE_ALLOWLIST = {
+    (network, asset.lower()): CMC_X402_PAY_TO
+    for (network, asset) in TOKEN_DECIMALS
+}
 
 EIP3009_TYPE_FIELDS = [
     {"name": "from", "type": "address"},
@@ -87,10 +94,36 @@ class PaymentOffer:
 
     @property
     def cost_usd(self) -> float:
-        dec = TOKEN_DECIMALS.get((self.network, self.asset))
+        dec = _token_decimals(self.network, self.asset)
         if dec is None:
-            return float("nan")
+            raise ValueError(f"unsupported x402 asset: {self.network} {self.asset}")
+        if self.amount <= 0:
+            raise ValueError(f"x402 amount must be positive: {self.amount}")
         return self.amount / 10**dec
+
+
+def _offer_key(network: str, asset: str) -> tuple[str, str]:
+    return network, asset.lower()
+
+
+def _token_decimals(network: str, asset: str) -> int | None:
+    key = _offer_key(network, asset)
+    for (known_network, known_asset), decimals in TOKEN_DECIMALS.items():
+        if key == _offer_key(known_network, known_asset):
+            return decimals
+    return None
+
+
+def _expected_payee(offer: PaymentOffer) -> str:
+    expected = PAYEE_ALLOWLIST.get(_offer_key(offer.network, offer.asset))
+    if expected is None:
+        raise ValueError(f"unsupported x402 asset: {offer.network} {offer.asset}")
+    if offer.pay_to.lower() != expected.lower():
+        raise ValueError(
+            f"x402 payee mismatch for {offer.network} {offer.asset}: "
+            f"expected {expected}, got {offer.pay_to}"
+        )
+    return expected
 
 
 def parse_payment_required(header_b64: str) -> list[PaymentOffer]:
@@ -130,13 +163,13 @@ def choose_offer(
             offer
             for offer in offers
             if offer.network == net and offer.method == "eip3009"
+            and _token_decimals(offer.network, offer.asset) is not None
+            and offer.amount > 0
         ]
         for asset in preferred_assets:
             for offer in network_offers:
                 if offer.asset.lower() == asset.lower():
                     return offer
-        if network_offers:
-            return network_offers[0]
     raise ValueError(
         f"no eip3009 offer on preferred networks; got "
         f"{[(o.network, o.method) for o in offers]}"
@@ -151,12 +184,18 @@ class X402Payer:
 
     def payment_header(self, offer: PaymentOffer, resource: dict | None) -> str:
         now = int(time.time())
+        pay_to = _expected_payee(offer)
+        if offer.amount <= 0:
+            raise ValueError(f"x402 amount must be positive: {offer.amount}")
+        timeout = min(
+            max(1, offer.max_timeout_seconds), MAX_PAYMENT_TIMEOUT_SECONDS
+        )
         authorization = {
             "from": self._signer.wallet_address,
-            "to": offer.pay_to,
+            "to": pay_to,
             "value": offer.amount,
             "validAfter": now - 60,
-            "validBefore": now + offer.max_timeout_seconds,
+            "validBefore": now + timeout,
             "nonce": "0x" + secrets.token_bytes(32).hex(),
         }
         domain = {
@@ -170,7 +209,7 @@ class X402Payer:
             domain=domain,
             types=types,
             message=authorization,
-            expected_to=offer.pay_to,
+            expected_to=pay_to,
         )
         # bnbagent returns the eth_account HexBytes signature; normalize to 0x-hex.
         signature_hex = "0x" + bytes(signed["signature"]).hex()
@@ -215,7 +254,13 @@ class SpendLedger:
     def authorize(self, tool: str, offer: PaymentOffer) -> None:
         now = datetime.now(timezone.utc)
         day = now.strftime("%Y-%m-%d")
-        projected = self.spent_on(day) + offer.cost_usd
+        cost_usd = offer.cost_usd
+        if not math.isfinite(cost_usd) or cost_usd <= 0:
+            raise ValueError(f"invalid x402 cost: {cost_usd}")
+        spent = self.spent_on(day)
+        if not math.isfinite(spent):
+            raise ValueError(f"invalid x402 spend ledger total: {spent}")
+        projected = spent + cost_usd
         if projected > self.daily_budget_usd:
             raise ValueError(
                 f"x402 daily budget exceeded: projected ${projected:.4f} "
@@ -228,10 +273,10 @@ class SpendLedger:
             "network": offer.network,
             "asset": offer.asset,
             "amount": offer.amount,
-            "cost_usd": offer.cost_usd,
+            "cost_usd": cost_usd,
         }
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+            f.write(json.dumps(entry, separators=(",", ":"), allow_nan=False) + "\n")
             f.flush()
             os.fsync(f.fileno())
 
@@ -282,13 +327,14 @@ class X402MCPClient:
                 return None, DataPurchase(tool=name, cost_usdc=0.0, ok=False)
             challenge = resp.headers.get("PAYMENT-REQUIRED", "")
             offer = choose_offer(parse_payment_required(challenge))
+            _expected_payee(offer)
+            cost = offer.cost_usd
             if self.spend_ledger is not None:
                 self.spend_ledger.authorize(name, offer)
             header = self.payer.payment_header(
                 offer, resource={"url": f"X402_{name}", "description": name}
             )
             resp = self._post(body, headers={"PAYMENT-SIGNATURE": header})
-            cost = offer.cost_usd
         ok = resp.status_code == 200
         response_payload = resp.json() if ok else {}
         response_hash, response_bytes = (

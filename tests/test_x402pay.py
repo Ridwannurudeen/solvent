@@ -13,6 +13,7 @@ from bnbagent.x402 import X402Signer
 from solvent.signals.x402pay import (
     BASE_USDC,
     BSC_USD1,
+    MAX_PAYMENT_TIMEOUT_SECONDS,
     EIP3009_TYPE_FIELDS,
     PaymentOffer,
     SpendLedger,
@@ -27,6 +28,12 @@ FIXTURE = Path(__file__).parent / "fixtures" / "payment_required.json"
 
 def fixture_header() -> str:
     return base64.b64encode(FIXTURE.read_bytes()).decode()
+
+
+def tampered_header(**changes) -> str:
+    payload = json.loads(FIXTURE.read_text())
+    payload["accepts"][0].update(changes)
+    return base64.b64encode(json.dumps(payload).encode()).decode()
 
 
 def test_parse_live_challenge():
@@ -68,6 +75,42 @@ def test_choose_rejects_permit2_only():
         choose_offer(offers)
 
 
+def test_choose_rejects_unknown_assets_on_preferred_network():
+    offer = PaymentOffer(
+        scheme="exact",
+        network="eip155:8453",
+        asset="0x0000000000000000000000000000000000000001",
+        amount=10_000,
+        pay_to="0x3C5f3a6cE224BB89D72f5EB4232ecC27F67B3eeA",
+        max_timeout_seconds=30,
+        token_name="Unknown",
+        token_version="1",
+        method="eip3009",
+        raw={},
+    )
+
+    with pytest.raises(ValueError, match="no eip3009 offer"):
+        choose_offer([offer])
+
+
+def test_unknown_asset_cost_is_refused():
+    offer = PaymentOffer(
+        scheme="exact",
+        network="eip155:8453",
+        asset="0x0000000000000000000000000000000000000001",
+        amount=10_000,
+        pay_to="0x3C5f3a6cE224BB89D72f5EB4232ecC27F67B3eeA",
+        max_timeout_seconds=30,
+        token_name="Unknown",
+        token_version="1",
+        method="eip3009",
+        raw={},
+    )
+
+    with pytest.raises(ValueError, match="unsupported x402 asset"):
+        _ = offer.cost_usd
+
+
 class _FakeResponse:
     def __init__(self, status_code, body=None, headers=None):
         self.status_code = status_code
@@ -107,6 +150,24 @@ class _PaidClient(X402MCPClient):
         return self._responses.pop(0)
 
 
+class _BadPayeeClient(X402MCPClient):
+    def __init__(self, ledger):
+        super().__init__(payer=_DummyPayer(), spend_ledger=ledger)
+        self._responses = [
+            _FakeResponse(
+                402,
+                headers={
+                    "PAYMENT-REQUIRED": tampered_header(
+                        payTo="0x000000000000000000000000000000000000dEaD"
+                    )
+                },
+            ),
+        ]
+
+    def _post(self, body, headers=None):
+        return self._responses.pop(0)
+
+
 def test_paid_tool_level_error_is_failed_purchase():
     result, purchase = _ToolErrorClient().call_tool("get_global_metrics_latest", {})
 
@@ -130,12 +191,42 @@ def test_spend_ledger_persists_daily_authorizations(tmp_path):
     assert ledger.spent_on(entry["ts"][:10]) == pytest.approx(0.01)
 
 
+def test_bad_payee_refused_before_ledger_write(tmp_path):
+    ledger = SpendLedger(tmp_path / "x402-spend.jsonl", daily_budget_usd=1.0)
+
+    with pytest.raises(ValueError, match="x402 payee mismatch"):
+        _BadPayeeClient(ledger).call_tool("get_global_metrics_latest", {})
+
+    assert not ledger.path.exists()
+
+
 def test_spend_ledger_refuses_restart_budget_overrun(tmp_path):
     ledger = SpendLedger(tmp_path / "x402-spend.jsonl", daily_budget_usd=0.015)
     _PaidClient(ledger).call_tool("get_global_metrics_latest", {})
 
     with pytest.raises(ValueError, match="x402 daily budget exceeded"):
         _PaidClient(ledger).call_tool("get_crypto_quotes_latest", {})
+
+
+def test_spend_ledger_refuses_unknown_asset_without_writing(tmp_path):
+    ledger = SpendLedger(tmp_path / "x402-spend.jsonl", daily_budget_usd=1.0)
+    offer = PaymentOffer(
+        scheme="exact",
+        network="eip155:8453",
+        asset="0x0000000000000000000000000000000000000001",
+        amount=10_000,
+        pay_to="0x3C5f3a6cE224BB89D72f5EB4232ecC27F67B3eeA",
+        max_timeout_seconds=30,
+        token_name="Unknown",
+        token_version="1",
+        method="eip3009",
+        raw={},
+    )
+
+    with pytest.raises(ValueError, match="unsupported x402 asset"):
+        ledger.authorize("get_crypto_quotes_latest", offer)
+
+    assert not ledger.path.exists()
 
 
 # ── End-to-end signing with a throwaway key ───────────────────────────
@@ -146,6 +237,7 @@ def throwaway_payer(offer: PaymentOffer) -> tuple[X402Payer, str]:
     policy = SigningPolicy(
         domain_allowlist=frozenset({(offer.chain_id, offer.asset)}),
         primary_type_allowlist=frozenset({"TransferWithAuthorization"}),
+        validity_required_primary_types=frozenset({"TransferWithAuthorization"}),
     )
     wallet = EVMWalletProvider(
         password="test-only",
@@ -199,6 +291,25 @@ def test_payment_header_signature_recovers_wallet():
     assert recovered.lower() == address.lower()
 
 
+def test_payment_header_caps_challenge_timeout():
+    offer = choose_offer(parse_payment_required(fixture_header()))
+    payer, _ = throwaway_payer(offer)
+    slow_offer = PaymentOffer(
+        **{
+            **offer.__dict__,
+            "max_timeout_seconds": MAX_PAYMENT_TIMEOUT_SECONDS * 10,
+        }
+    )
+
+    header = payer.payment_header(slow_offer, None)
+    payload = json.loads(base64.b64decode(header))
+    auth = payload["payload"]["authorization"]
+
+    assert int(auth["validBefore"]) - int(auth["validAfter"]) <= (
+        MAX_PAYMENT_TIMEOUT_SECONDS + 60
+    )
+
+
 def test_session_budget_exhausts():
     from bnbagent.x402.errors import X402BudgetExhaustedError
 
@@ -207,6 +318,7 @@ def test_session_budget_exhausts():
     policy = SigningPolicy(
         domain_allowlist=frozenset({(offer.chain_id, offer.asset)}),
         primary_type_allowlist=frozenset({"TransferWithAuthorization"}),
+        validity_required_primary_types=frozenset({"TransferWithAuthorization"}),
     )
     wallet = EVMWalletProvider(
         password="test-only",
@@ -227,8 +339,6 @@ def test_session_budget_exhausts():
 
 
 def test_tampered_recipient_refused():
-    from bnbagent.x402.errors import X402RecipientMismatchError
-
     offers = parse_payment_required(fixture_header())
     offer = choose_offer(offers)
     payer, _ = throwaway_payer(offer)
@@ -238,26 +348,5 @@ def test_tampered_recipient_refused():
             "pay_to": "0x000000000000000000000000000000000000dEaD",
         }
     )
-    # X402Signer pins expected_to to the offer's payTo; a swapped recipient
-    # inside the signer call must be refused. Simulate by signing the evil
-    # offer but asserting the guard path exists: recipient comes from the
-    # same offer object, so craft a mismatch via expected_to directly.
-    with pytest.raises(X402RecipientMismatchError):
-        payer._signer.sign_payment(
-            domain={
-                "name": evil.token_name,
-                "version": evil.token_version,
-                "chainId": evil.chain_id,
-                "verifyingContract": evil.asset,
-            },
-            types={"TransferWithAuthorization": EIP3009_TYPE_FIELDS},
-            message={
-                "from": payer._signer.wallet_address,
-                "to": evil.pay_to,
-                "value": evil.amount,
-                "validAfter": 0,
-                "validBefore": 10,
-                "nonce": "0x" + "11" * 32,
-            },
-            expected_to=offer.pay_to,  # the real recipient
-        )
+    with pytest.raises(ValueError, match="x402 payee mismatch"):
+        payer.payment_header(evil, None)

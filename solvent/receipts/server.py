@@ -11,10 +11,12 @@ import argparse
 import json
 import logging
 import os
+from collections import deque
 from collections.abc import Callable
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from ..brain.proof import verify_inference_proof
 from ..commerce.signal import build_signal_payload
@@ -29,6 +31,8 @@ logger = logging.getLogger(__name__)
 # Cycle is hourly; treat the agent as alive within ~1.5 windows (matches the
 # watchdog's staleness threshold).
 ALIVE_MAX_AGE_S = 5400
+DEFAULT_RECEIPT_LIMIT = 250
+MAX_RECEIPT_LIMIT = 1000
 
 
 def load_entries(path: Path) -> list[dict]:
@@ -36,6 +40,45 @@ def load_entries(path: Path) -> list[dict]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def load_recent_entries(path: Path, limit: int = DEFAULT_RECEIPT_LIMIT) -> list[dict]:
+    """Last `limit` receipt entries, in chain order."""
+    if not path.exists():
+        return []
+    lines = deque(maxlen=limit)
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                lines.append(line)
+    return [json.loads(line) for line in lines]
+
+
+def load_entry_page(path: Path, *, start: int, limit: int) -> list[dict]:
+    """Bounded receipt page by zero-based line/sequence offset."""
+    if not path.exists():
+        return []
+    entries = []
+    with path.open(encoding="utf-8") as f:
+        for idx, line in enumerate(f):
+            if not line.strip() or idx < start:
+                continue
+            entries.append(json.loads(line))
+            if len(entries) >= limit:
+                break
+    return entries
+
+
+def _bounded_int(
+    values: list[str] | None, *, default: int, minimum: int, maximum: int
+) -> int:
+    if not values:
+        return default
+    try:
+        value = int(values[0])
+    except (TypeError, ValueError):
+        return default
+    return min(max(value, minimum), maximum)
 
 
 def _read_json(path: Path, default: object) -> object:
@@ -186,6 +229,21 @@ def state(
     }
 
 
+def public_state(data_dir: Path) -> dict:
+    payload = state(data_dir, live_reader=lambda _position: {})
+    for key in (
+        "start_equity_usd",
+        "peak_equity_usd",
+        "position",
+        "holdings",
+        "holdings_error",
+    ):
+        payload.pop(key, None)
+    payload["holdings_source"] = "redacted"
+    payload["private_state_redacted"] = True
+    return payload
+
+
 def verify(path: Path, anchors_path: Path | None = None) -> dict:
     if not path.exists():
         payload = {"ok": True, "count": 0, "head_hash": "0x" + "0" * 64}
@@ -303,21 +361,38 @@ class ReceiptHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")  # read-only public data
+        self.send_header(
+            "Access-Control-Allow-Origin",
+            os.environ.get("SOLVENT_PUBLIC_ORIGIN", "https://solvent.gudman.xyz"),
+        )
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_GET(self) -> None:
-        route = self.path.split("?", 1)[0].rstrip("/") or "/"
+        parsed = urlsplit(self.path)
+        route = parsed.path.rstrip("/") or "/"
+        query = parse_qs(parsed.query)
         if route == "/":
             self._send(summary(self.receipts_path))
         elif route == "/receipts":
-            self._send(load_entries(self.receipts_path))
+            limit = _bounded_int(
+                query.get("limit"),
+                default=DEFAULT_RECEIPT_LIMIT,
+                minimum=1,
+                maximum=MAX_RECEIPT_LIMIT,
+            )
+            if "start" in query:
+                start = _bounded_int(
+                    query.get("start"), default=0, minimum=0, maximum=10**9
+                )
+                self._send(load_entry_page(self.receipts_path, start=start, limit=limit))
+            else:
+                self._send(load_recent_entries(self.receipts_path, limit=limit))
         elif route == "/verify":
             self._send(verify(self.receipts_path, self.data_dir / "anchors.json"))
         elif route == "/state":
-            self._send(state(self.data_dir))
+            self._send(public_state(self.data_dir))
         elif route == "/inference-proofs":
             self._send(inference_proofs(self.receipts_path))
         elif route == "/inference-commitments":

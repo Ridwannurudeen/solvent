@@ -22,7 +22,8 @@ SOLVENT_TG_CHAT_ID=
 # Agent wallet key for x402 data payments (CMCSource) + its keystore password.
 # SOLVENT_PRIVATE_KEY=
 # SOLVENT_WALLET_PASSWORD=
-# Trading network + TWAK chain id.
+# Trading network. TWAK chain id is derived from the trade network when unset
+# and must match if provided (bsc-mainnet -> bsc, bsc-testnet -> bsctestnet).
 # SOLVENT_TRADE_NETWORK=bsc-mainnet
 # SOLVENT_TWAK_CHAIN=bsc
 # SOLVENT_WALLET_ADDRESS=         # required in live mode; the TWAK trading wallet
@@ -54,5 +55,6 @@ SOLVENT_ERC8183_ENABLED=0
 # SOLVENT_ERC8183_NETWORK=bsc-mainnet
 # SOLVENT_ERC8183_AGENT_URL=https://solvent.gudman.xyz/erc8183
 # SOLVENT_ERC8183_STORAGE_DIR=/opt/solvent/data-prod/erc8183
-# Required (> 0) when SOLVENT_ERC8183_ENABLED=1; e.g. 0.05
-# SOLVENT_ERC8183_SERVICE_PRICE=0.05
+# Required (> 0) when SOLVENT_ERC8183_ENABLED=1; raw token units, e.g.
+# 0.05 of an 18-decimal payment token = 50000000000000000.
+# SOLVENT_ERC8183_SERVICE_PRICE=50000000000000000

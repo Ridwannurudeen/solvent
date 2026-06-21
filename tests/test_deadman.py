@@ -1,6 +1,8 @@
 import json
 from datetime import datetime, timezone
 
+import pytest
+
 from solvent.exec.executor import Journal, PaperExecutor, TwakExecutor
 from solvent.kernel.rules import RiskConfig
 from solvent.ops.deadman import make_executor, run_deadman
@@ -183,11 +185,21 @@ def test_independent_of_signals():
 
 
 def test_live_mode_uses_twak_executor(tmp_path, monkeypatch):
-    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+    monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-testnet")
+    monkeypatch.delenv("SOLVENT_TWAK_CHAIN", raising=False)
     journal = _journal(tmp_path)
     executor = make_executor("live", journal, CFG)
     assert isinstance(executor, TwakExecutor)
-    assert executor.chain == "bsc"
+    assert executor.chain == "bsctestnet"
+
+
+def test_live_mode_rejects_trade_network_twak_chain_mismatch(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-testnet")
+    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+    journal = _journal(tmp_path)
+
+    with pytest.raises(SystemExit, match="does not match"):
+        make_executor("live", journal, CFG)
 
 
 def _intent():

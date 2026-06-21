@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Standalone receipt-chain verifier — Python stdlib only, no install, zero trust.
 
-Pulls SOLVENT's public decision log and recomputes the entire hash chain from
-genesis, independent of the agent's own code. Prints the head hash so you can
-compare it against the /verify endpoint and the on-chain ERC-8004 anchor.
+Pulls SOLVENT's public decision log in bounded pages and recomputes the entire
+hash chain from genesis, independent of the agent's own code. Prints the head
+hash so you can compare it against the /verify endpoint and the on-chain
+ERC-8004 anchor.
 
     python verify_receipts.py                                   # fetch the live log
     python verify_receipts.py https://solvent.gudman.xyz/receipts
@@ -22,10 +23,30 @@ import urllib.request
 
 GENESIS = "0x" + "0" * 64
 DEFAULT = "https://solvent.gudman.xyz/receipts"
+PAGE_SIZE = 1000
+
+
+def page_url(base: str, start: int) -> str:
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}start={start}&limit={PAGE_SIZE}"
+
+
+def load_paged(base: str) -> list:
+    entries = []
+    start = 0
+    while True:
+        with urllib.request.urlopen(page_url(base, start)) as r:
+            page = json.load(r)
+        entries.extend(page)
+        if len(page) < PAGE_SIZE:
+            return entries
+        start += len(page)
 
 
 def load(src: str) -> list:
     if src.startswith("http"):
+        if "start=" not in src:
+            return load_paged(src)
         with urllib.request.urlopen(src) as r:
             return json.load(r)
     with open(src, encoding="utf-8") as f:

@@ -73,7 +73,7 @@
       <div class="tcard">
         <div class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#f0b90b" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V9M9 18V5M14 18v-6M19 18v-9"/></svg></div>
         <h3>Guardrailed autonomy</h3>
-        <p>A deterministic kernel decides every dollar: ≥75% floor, one capped sleeve, hard stops, a kill switch inside the drawdown limit. The AI advisor can only ever de-risk.</p>
+        <p>A deterministic kernel decides every dollar: policy-selected floor and sleeve caps, hard stops, and a kill switch inside the drawdown limit. The AI advisor can only ever de-risk.</p>
       </div>
     </div>
   </section>
@@ -120,7 +120,7 @@
   <section class="section">
     <div class="section-head"><h2>Honest limitations</h2><span class="note">what a glass box owes you</span></div>
     <div class="limits">
-      <div class="limit"><div class="l">Capital preservation, not alpha</div><div class="r">≥75% sits in stables by design, so the baseline return is near zero. The edge is a small momentum sleeve — survival first.</div></div>
+      <div class="limit"><div class="l">Capital preservation, not alpha</div><div class="r">The safety profile keeps ≥75% in stables; aggressive scored-window profiles must be explicitly selected and verified in the policy manifest.</div></div>
       <div class="limit"><div class="l">Tamper-evidence has a window</div><div class="r">History up to the last daily anchor is on-chain-bound; the current ≤24h window is recompute-consistent but not yet anchored.</div></div>
       <div class="limit"><div class="l">Verification, not attestation</div><div class="r">Receipts prove the declared inputs and outputs are hash-bound — not that a specific model ran. It is not a TEE or zk proof.</div></div>
     </div>

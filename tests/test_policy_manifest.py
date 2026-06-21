@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+import pytest
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
@@ -31,6 +32,8 @@ def test_policy_manifest_hash_is_stable_for_same_inputs():
     assert first == second
     assert first["manifest"]["schema"] == SCHEMA
     assert first["manifest"]["strategy"]["profile"] == "safety"
+    assert first["manifest"]["execution"]["chain"] == "bsc-mainnet"
+    assert first["manifest"]["execution"]["twak_chain"] == "bsc"
     assert first["manifest"]["execution"]["result_outcomes"] == [
         "executed_now",
         "already_confirmed",
@@ -46,6 +49,32 @@ def test_policy_manifest_hash_is_stable_for_same_inputs():
     )
     assert first["manifest"]["emergency"]["persistent_runtime_halt"] is True
     assert first["manifest_hash"].startswith("0x")
+
+
+def test_policy_manifest_derives_testnet_twak_chain():
+    now = datetime(2026, 6, 21, 12, 0, tzinfo=timezone.utc)
+
+    payload = build_policy_manifest(
+        profile="safety",
+        generated_at=now,
+        git_commit="abc123",
+        env={"SOLVENT_TRADE_NETWORK": "bsc-testnet"},
+    )
+
+    assert payload["manifest"]["execution"]["chain"] == "bsc-testnet"
+    assert payload["manifest"]["execution"]["twak_chain"] == "bsctestnet"
+
+
+def test_policy_manifest_rejects_trade_network_twak_chain_mismatch():
+    now = datetime(2026, 6, 21, 12, 0, tzinfo=timezone.utc)
+
+    with pytest.raises(ValueError, match="does not match"):
+        build_policy_manifest(
+            profile="safety",
+            generated_at=now,
+            git_commit="abc123",
+            env={"SOLVENT_TRADE_NETWORK": "bsc-testnet", "SOLVENT_TWAK_CHAIN": "bsc"},
+        )
 
 
 def test_policy_manifest_signature_recovers_wallet():

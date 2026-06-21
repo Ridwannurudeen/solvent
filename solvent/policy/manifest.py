@@ -14,6 +14,7 @@ from eth_account.messages import encode_defunct
 
 from ..brain.advisor import MODEL
 from ..brain.proof import sha256_json
+from ..exec.networks import resolve_twak_chain
 from ..kernel.allowlist import ADDRESSES, ALLOWED_SYMBOLS, FLOOR_SYMBOLS, SLEEVE_SYMBOLS
 from ..kernel.rules import RiskConfig, risk_config_for_profile
 from ..ops.files import atomic_write_text
@@ -60,6 +61,8 @@ def build_policy_manifest(
     env = env or os.environ
     cfg = risk_config_for_profile(profile)
     generated = generated_at or datetime.now(timezone.utc)
+    trade_network = env.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet")
+    twak_chain = resolve_twak_chain(trade_network, env.get("SOLVENT_TWAK_CHAIN"))
     manifest = {
         "schema": SCHEMA,
         "generated_at": generated.astimezone(timezone.utc).isoformat(),
@@ -105,8 +108,8 @@ def build_policy_manifest(
             "x402_max_per_call_usd": cfg.x402_max_per_call_usdc / 1e6,
         },
         "execution": {
-            "chain": env.get("SOLVENT_TRADE_NETWORK", "bsc-mainnet"),
-            "twak_chain": env.get("SOLVENT_TWAK_CHAIN", "bsc"),
+            "chain": trade_network,
+            "twak_chain": twak_chain,
             "executor": "Trust Wallet Agent Kit",
             "one_transaction_per_intent": True,
             "settlement_verification": [

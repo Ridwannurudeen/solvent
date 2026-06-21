@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -91,6 +92,14 @@ def _max_drawdown(entries: list[dict]) -> float:
         if peak > 0:
             max_dd = max(max_dd, 1.0 - equity / peak)
     return max_dd
+
+
+def _finite_nonnegative_float(value: object) -> tuple[float, bool]:
+    try:
+        parsed = float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0, False
+    return parsed, math.isfinite(parsed) and parsed >= 0.0
 
 
 def _anchor_coverage(entries: list[dict], anchors: object) -> dict:
@@ -240,7 +249,15 @@ def policy_compliance_report(
                 f"active_risk_profile={active_profile}",
             )
         for purchase in receipt.get("data_purchases") or []:
-            cost = float(purchase.get("cost_usdc") or 0.0)
+            cost, cost_ok = _finite_nonnegative_float(purchase.get("cost_usdc"))
+            _check(
+                checks,
+                f"receipt_{receipt.get('seq')}_data_cost_finite",
+                cost_ok,
+                f"tool={purchase.get('tool')} cost={purchase.get('cost_usdc')}",
+            )
+            if not cost_ok:
+                continue
             if purchase.get("ok") and cost > 0:
                 _check(
                     checks,

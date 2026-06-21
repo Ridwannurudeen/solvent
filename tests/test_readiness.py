@@ -204,7 +204,11 @@ def test_live_readiness_accepts_twak_file_auth(tmp_path, monkeypatch):
                     "SOLVENT_WALLET_PASSWORD": True,
                     "SOLVENT_WALLET_ADDRESS": True,
                     "SOLVENT_TRADE_NETWORK": True,
-                    "SOLVENT_TWAK_CHAIN": True,
+                },
+                "twak_chain": {
+                    "matches_trade_network": True,
+                    "effective": "bsc",
+                    "error": None,
                 },
                 "required_live_twak": {
                     "TWAK_ACCESS_ID": False,
@@ -229,6 +233,30 @@ def test_live_readiness_accepts_twak_file_auth(tmp_path, monkeypatch):
         c["name"] == "live_twak_credentials_available"
         and c["ok"]
         and "local setup" in c["detail"]
+        for c in report["checks"]
+    )
+
+
+def test_live_readiness_fails_on_twak_chain_mismatch(tmp_path, monkeypatch):
+    data_dir, head_hash = _data_dir(tmp_path, paper=False)
+    monkeypatch.setenv("SOLVENT_PRIVATE_KEY", "x")
+    monkeypatch.setenv("SOLVENT_WALLET_PASSWORD", "x")
+    monkeypatch.setenv("SOLVENT_WALLET_ADDRESS", "0x" + "12" * 20)
+    monkeypatch.setenv("SOLVENT_TRADE_NETWORK", "bsc-testnet")
+    monkeypatch.setenv("SOLVENT_TWAK_CHAIN", "bsc")
+    monkeypatch.setenv("TWAK_ACCESS_ID", "x")
+    monkeypatch.setenv("TWAK_HMAC_SECRET", "x")
+    monkeypatch.setenv("TWAK_WALLET_PASSWORD", "x")
+    monkeypatch.setenv("SOLVENT_TG_BOT_TOKEN", "x")
+    monkeypatch.setenv("SOLVENT_TG_CHAT_ID", "x")
+
+    report = readiness(data_dir, profile="live", fetcher=_fetcher(head_hash))
+
+    assert report["ok"] is False
+    assert any(
+        c["name"] == "live_twak_chain_matches_trade_network"
+        and c["required"]
+        and not c["ok"]
         for c in report["checks"]
     )
 

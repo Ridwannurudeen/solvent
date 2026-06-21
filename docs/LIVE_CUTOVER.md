@@ -27,8 +27,9 @@ sudo -u solvent -H .venv/bin/python -m solvent.policy.manifest --profile "${SOLV
 
 Required outcomes:
 
-- `SOLVENT_WALLET_ADDRESS`, `SOLVENT_TRADE_NETWORK`, and `SOLVENT_TWAK_CHAIN`
-  are present in preflight.
+- `SOLVENT_WALLET_ADDRESS` and `SOLVENT_TRADE_NETWORK` are present in
+  preflight; `SOLVENT_TWAK_CHAIN` is either unset and derived or matches the
+  derived TWAK chain for the trade network.
 - `paper_data_in_dir` is `false` for `/opt/solvent/data-prod`.
 - `journal_has_unresolved` is `false`.
 - Track 1 status is registered for
@@ -63,7 +64,8 @@ The live env block in `/opt/solvent/solvent.env` should resolve to:
 SOLVENT_MODE=live
 SOLVENT_DATA_DIR=/opt/solvent/data-prod
 SOLVENT_TRADE_NETWORK=bsc-mainnet
-SOLVENT_TWAK_CHAIN=bsc
+# Optional; derived as bsc from SOLVENT_TRADE_NETWORK and rejected if mismatched.
+# SOLVENT_TWAK_CHAIN=bsc
 SOLVENT_WALLET_ADDRESS=0xE4fe23FB57dbb9AC2f685ea29B6b9A1409A0d359
 SOLVENT_PRETRADE_ANCHOR=1
 ```

@@ -15,6 +15,21 @@ SCHEMA = "solvent.erc8183.signal.v1"
 SERVICE_ID = "solvent.daily-regime-signal"
 
 
+def service_price_raw_units(raw: str | None = None) -> str:
+    raw = os.environ.get("SOLVENT_ERC8183_SERVICE_PRICE") if raw is None else raw
+    if raw is None or not raw.isdecimal():
+        raise RuntimeError(
+            "SOLVENT_ERC8183_SERVICE_PRICE must be a positive integer in raw "
+            "token units"
+        )
+    if int(raw) <= 0:
+        raise RuntimeError(
+            "SOLVENT_ERC8183_SERVICE_PRICE must be set > 0 to enable the paid "
+            "signal service (a 0 price lets any caller drain agent gas)"
+        )
+    return raw
+
+
 def _load_entries(path: Path) -> list[dict]:
     if not path.exists():
         return []
@@ -137,6 +152,7 @@ async def submit_signal_job(data_dir: Path, job_id: int) -> dict[str, Any]:
     from bnbagent.storage import LocalStorageProvider
     from bnbagent.wallets import EVMWalletProvider
 
+    service_price = service_price_raw_units()
     password = os.environ.get("SOLVENT_WALLET_PASSWORD") or os.environ.get(
         "WALLET_PASSWORD"
     )
@@ -159,7 +175,7 @@ async def submit_signal_job(data_dir: Path, job_id: int) -> dict[str, Any]:
         storage=LocalStorageProvider(
             os.environ.get("SOLVENT_ERC8183_STORAGE_DIR") or str(data_dir / "erc8183")
         ),
-        service_price=os.environ.get("SOLVENT_ERC8183_SERVICE_PRICE", "0"),
+        service_price=service_price,
         agent_url=os.environ.get(
             "SOLVENT_ERC8183_AGENT_URL", "https://solvent.gudman.xyz/erc8183"
         ),

@@ -8,7 +8,7 @@ from bnbagent.erc8183.server import create_erc8183_app
 from bnbagent.storage import LocalStorageProvider
 from bnbagent.wallets import EVMWalletProvider
 
-from .signal import SERVICE_ID, build_job_response
+from .signal import SERVICE_ID, build_job_response, service_price_raw_units
 
 
 def _data_dir() -> Path:
@@ -34,18 +34,8 @@ def _wallet() -> EVMWalletProvider:
 def _service_price() -> str:
     """Validated job price. A 0/unset price disables the bnbagent budget floor,
     so any caller could fund a near-zero job and drain the agent's gas — refuse
-    to start the paid service without an explicit positive price."""
-    raw = os.environ.get("SOLVENT_ERC8183_SERVICE_PRICE")
-    try:
-        price = float(raw) if raw is not None else 0.0
-    except ValueError as exc:
-        raise RuntimeError(f"invalid SOLVENT_ERC8183_SERVICE_PRICE: {raw!r}") from exc
-    if price <= 0:
-        raise RuntimeError(
-            "SOLVENT_ERC8183_SERVICE_PRICE must be set > 0 to enable the paid "
-            "signal service (a 0 price lets any caller drain agent gas)"
-        )
-    return raw
+    to start the paid service without an explicit positive raw-unit price."""
+    return service_price_raw_units()
 
 
 def _config() -> ERC8183Config:

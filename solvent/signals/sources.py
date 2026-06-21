@@ -376,11 +376,13 @@ class CrossCheckedSource:
         *,
         max_deviation_pct: float = 5.0,
         require_secondary: bool = True,
+        require_momentum_confirmation: bool = True,
     ) -> None:
         self.primary = primary
         self.secondary = secondary
         self.max_deviation_pct = max_deviation_pct
         self.require_secondary = require_secondary
+        self.require_momentum_confirmation = require_momentum_confirmation
 
     def fetch(self) -> tuple[MarketSignals, list[DataPurchase]]:
         primary_signals, purchases = self.primary.fetch()
@@ -405,9 +407,23 @@ class CrossCheckedSource:
             if deviation > self.max_deviation_pct:
                 degraded = True
 
+        momentum = dict(primary_signals.momentum)
+        if self.require_momentum_confirmation:
+            for symbol, primary_score in primary_signals.momentum.items():
+                if primary_score <= 0:
+                    continue
+                secondary_score = secondary_signals.momentum.get(symbol)
+                if secondary_score is None or secondary_score <= 0:
+                    momentum.pop(symbol, None)
+                    if self.require_secondary:
+                        degraded = True
+                    continue
+                momentum[symbol] = min(primary_score, secondary_score)
+
         return (
             replace(
                 primary_signals,
+                momentum=momentum,
                 degraded=degraded,
                 source_deviation_pct=deviations,
             ),

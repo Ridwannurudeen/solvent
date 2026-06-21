@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from eth_account import Account
 
 from solvent.exec.executor import Journal
@@ -43,7 +44,7 @@ def _seed_policy(data_dir, wallet):
     return payload
 
 
-def _seed_receipts(data_dir, *, pretrade_anchor=True):
+def _seed_receipts(data_dir, *, pretrade_anchor=True, data_cost=0.01):
     chain = ReceiptChain(data_dir / "receipts.jsonl")
     intent = _intent()
     intent_payload = {
@@ -109,7 +110,7 @@ def _seed_receipts(data_dir, *, pretrade_anchor=True):
         data_purchases=[
             DataPurchase(
                 tool="get_crypto_quotes_latest",
-                cost_usdc=0.01,
+                cost_usdc=data_cost,
                 ok=True,
                 response_hash="0x" + "44" * 32,
                 response_bytes=128,
@@ -181,3 +182,18 @@ def test_policy_compliance_ignores_pre_manifest_journal_rows(tmp_path):
     report = policy_compliance_report(tmp_path, now=NOW)
 
     assert report["ok"] is True
+
+
+@pytest.mark.parametrize("data_cost", [float("nan"), float("inf"), -0.01])
+def test_policy_compliance_rejects_non_finite_x402_cost(tmp_path, data_cost):
+    wallet = Account.create()
+    _seed_policy(tmp_path, wallet)
+    _seed_receipts(tmp_path, data_cost=data_cost)
+
+    report = policy_compliance_report(tmp_path, now=NOW)
+
+    assert report["ok"] is False
+    assert any(
+        check["name"].endswith("_data_cost_finite") and check["ok"] is False
+        for check in report["checks"]
+    )

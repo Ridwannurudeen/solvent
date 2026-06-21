@@ -91,10 +91,17 @@ def test_service_price_rejects_zero(monkeypatch):
 
 def test_service_price_rejects_unset(monkeypatch):
     monkeypatch.delenv("SOLVENT_ERC8183_SERVICE_PRICE", raising=False)
-    with pytest.raises(RuntimeError, match="must be set > 0"):
+    with pytest.raises(RuntimeError, match="raw token units"):
         server._service_price()
 
 
-def test_service_price_accepts_positive(monkeypatch):
-    monkeypatch.setenv("SOLVENT_ERC8183_SERVICE_PRICE", "0.05")
-    assert server._service_price() == "0.05"
+@pytest.mark.parametrize("raw", ["0.05", "1e18", "-1", "abc"])
+def test_service_price_rejects_non_integer_raw_units(monkeypatch, raw):
+    monkeypatch.setenv("SOLVENT_ERC8183_SERVICE_PRICE", raw)
+    with pytest.raises(RuntimeError, match="raw token units"):
+        server._service_price()
+
+
+def test_service_price_accepts_positive_raw_units(monkeypatch):
+    monkeypatch.setenv("SOLVENT_ERC8183_SERVICE_PRICE", "50000000000000000")
+    assert server._service_price() == "50000000000000000"
