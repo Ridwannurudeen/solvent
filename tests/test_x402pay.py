@@ -11,6 +11,7 @@ from bnbagent.wallets import EVMWalletProvider
 from bnbagent.x402 import X402Signer
 
 from solvent.signals.x402pay import (
+    BASE_USDC,
     BSC_USD1,
     EIP3009_TYPE_FIELDS,
     PaymentOffer,
@@ -38,22 +39,25 @@ def test_parse_live_challenge():
     assert networks == {"eip155:8453", "eip155:56"}
 
 
-def test_choose_prefers_bsc_eip3009():
+def test_choose_prefers_base_usdc():
+    # Only the Base USDC rail settles through CMC's facilitator; the BSC
+    # EIP-3009 rails return "X402 submit error", so Base USDC is preferred.
     offer = choose_offer(parse_payment_required(fixture_header()))
-    assert offer.network == "eip155:56"
+    assert offer.network == "eip155:8453"
     assert offer.method == "eip3009"
-    assert offer.asset == BSC_USD1
+    assert offer.asset == BASE_USDC
 
 
-def test_choose_falls_back_to_base():
+def test_choose_falls_back_to_bsc():
     offers = [
         o
         for o in parse_payment_required(fixture_header())
-        if not (o.network == "eip155:56" and o.method == "eip3009")
+        if not (o.network == "eip155:8453" and o.method == "eip3009")
     ]
     offer = choose_offer(offers)
-    assert offer.network == "eip155:8453"
+    assert offer.network == "eip155:56"
     assert offer.method == "eip3009"
+    assert offer.asset == BSC_USD1
 
 
 def test_choose_rejects_permit2_only():

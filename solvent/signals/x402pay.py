@@ -13,8 +13,9 @@ caps per-call value, and tracks a session budget — the agent's
 "information budget" is enforced here, not in prose.
 
 The live CMC challenge offers payment on Base USDC (6 decimals) and on
-BSC in USDC / United Stables / USD1 (18 decimals). We prefer EIP-3009
-offers on BSC so the agent's entire economic life stays on one chain.
+BSC in USDC / United Stables / USD1 (18 decimals). Only the Base USDC
+rail actually settles through CMC's facilitator — the BSC EIP-3009 rails
+return "X402 submit error" — so Base USDC is preferred.
 """
 
 import base64
@@ -116,8 +117,8 @@ def parse_payment_required(header_b64: str) -> list[PaymentOffer]:
 
 def choose_offer(
     offers: list[PaymentOffer],
-    preferred_networks: tuple[str, ...] = ("eip155:56", "eip155:8453"),
-    preferred_assets: tuple[str, ...] = (BSC_USD1, BASE_USDC, BSC_UNITED_STABLES),
+    preferred_networks: tuple[str, ...] = ("eip155:8453", "eip155:56"),
+    preferred_assets: tuple[str, ...] = (BASE_USDC, BSC_USD1, BSC_UNITED_STABLES),
 ) -> PaymentOffer:
     """First EIP-3009 offer in preferred-network/asset order.
 
