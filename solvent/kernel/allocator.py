@@ -92,6 +92,41 @@ def best_candidate(
     return None
 
 
+# "Big guns": established large-caps from the executable sleeve, ETH first so
+# it wins ties (e.g. a flat tape where every momentum score is 0).
+SCALP_MAJORS = (
+    "ETH",
+    "AVAX",
+    "LINK",
+    "AAVE",
+    "DOT",
+    "ATOM",
+    "UNI",
+    "XRP",
+    "LTC",
+    "BCH",
+    "ADA",
+)
+
+
+def scalp_candidate(
+    signals: MarketSignals, universe: tuple[str, ...] = SCALP_MAJORS
+) -> tuple[str, float] | None:
+    """Top executable big-major for a forced scalp entry. Ranks by momentum
+    but, unlike best_candidate, has no entry bar — ties (incl. an all-zero
+    flat tape) break toward universe order, so ETH leads."""
+    avail = [
+        (sym, signals.momentum.get(sym, 0.0), idx)
+        for idx, sym in enumerate(universe)
+        if is_executable(sym)
+    ]
+    if not avail:
+        return None
+    avail.sort(key=lambda t: (-t[1], t[2]))
+    sym, score, _ = avail[0]
+    return sym, score
+
+
 def decide(
     state: PortfolioState,
     signals: MarketSignals,
@@ -226,7 +261,45 @@ def decide(
             return intents
         return intents  # holding; entries only when flat
 
-    # ── 2. Entry (flat, risk-on, confirmed candidate) ────────────────
+    # ── 2. Entry (flat) ──────────────────────────────────────────────
+    if cfg.forced_scalp:
+        if (
+            not signals.degraded
+            and state.trades_today < cfg.max_trades_per_day
+            and state.equity_usd >= cfg.min_portfolio_usd
+        ):
+            cand = scalp_candidate(signals)
+            price = signals.prices.get(cand[0]) if cand is not None else None
+            # A price is required: exits (stop / take-profit) need to mark the
+            # position every cycle, so never enter a token we can't price.
+            if cand is not None and price is not None:
+                symbol, score = cand
+                cap_frac = min(
+                    cfg.sleeve_frac_target,
+                    cfg.max_trade_frac,
+                    1.0 - cfg.floor_frac_min,
+                )
+                notional = cap_frac * state.equity_usd
+                # Funded from the floor; never breach the floor minimum.
+                max_from_floor = state.floor_usd - cfg.floor_frac_min * state.equity_usd
+                notional = min(notional, max(0.0, max_from_floor))
+                if notional > cfg.qual_trade_usd:
+                    intents.append(
+                        TradeIntent(
+                            kind=IntentKind.ENTER,
+                            from_symbol=cfg.floor_symbols[0],
+                            to_symbol=symbol,
+                            notional_usd=notional,
+                            reason=(
+                                f"SCALP ENTER: {symbol} (forced, no signal; "
+                                f"momentum {score:.2f}), sleeve {cap_frac:.0%} of equity"
+                            ),
+                            expected_price_usd=price,
+                        )
+                    )
+        return intents
+
+    # ── 2b. Signal-gated entry (flat, risk-on, confirmed candidate) ──
     effective_regime = (
         regime_override if regime_override is not None else classify_regime(signals)
     )

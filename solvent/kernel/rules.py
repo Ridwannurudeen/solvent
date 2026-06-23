@@ -86,6 +86,11 @@ class RiskConfig:
     # with qualification micro-swaps (one per cycle) until this is met; the
     # competition only requires 1, so the default stays 1.
     min_trades_per_day: int = 1
+    # Forced-scalp mode: when flat, enter the top executable big-major even
+    # without a risk-on momentum signal (exits still governed by the stop /
+    # take-profit / kill-switch below). Off by default — the signal-gated
+    # barbell is the standard behavior.
+    forced_scalp: bool = False
 
     # ── Data spend (x402 metering) ───────────────────────────────────
     # Session budget for paid data calls, USDC base units (6 decimals).
@@ -110,7 +115,13 @@ class RiskConfig:
         return cap
 
 
-RISK_PROFILE_NAMES = ("safety", "tournament_50", "conviction_50", "tournament_60")
+RISK_PROFILE_NAMES = (
+    "safety",
+    "tournament_50",
+    "conviction_50",
+    "tournament_60",
+    "scalp_eth",
+)
 
 
 def risk_config_for_profile(profile: str) -> RiskConfig:
@@ -163,5 +174,24 @@ def risk_config_for_profile(profile: str) -> RiskConfig:
                 RatchetTier(gain_pct=0.20, sleeve_cap=0.25),
                 RatchetTier(gain_pct=0.35, sleeve_cap=0.15),
             ),
+        )
+    if name == "scalp_eth":
+        # Daily scalp of the big majors (ETH-led): force an entry when flat
+        # even without a risk-on momentum signal, then exit on a tight
+        # symmetric +/-3% band. Drawdown-first: a 25% sleeve cap plus 3%
+        # stops plus the 22% kill switch keep the book far from the 30% DQ.
+        return replace(
+            base,
+            forced_scalp=True,
+            floor_frac_min=0.75,
+            sleeve_frac_target=0.25,
+            max_trade_frac=0.25,
+            stop_pct=0.03,
+            take_profit_pct=0.03,
+            take_profit_fraction=1.0,
+            min_hold_hours=0.0,
+            min_entry_momo=0.0,
+            min_trades_per_day=3,
+            qual_deadline_hour_utc=18,
         )
     raise ValueError(f"unknown risk profile: {profile}")

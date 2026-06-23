@@ -10,8 +10,9 @@ from solvent.kernel.allocator import (
     classify_regime,
     decide,
     qualification_intent,
+    scalp_candidate,
 )
-from solvent.kernel.rules import RiskConfig
+from solvent.kernel.rules import RiskConfig, risk_config_for_profile
 from solvent.kernel.state import MarketSignals, PortfolioState, SleevePosition
 
 CFG = RiskConfig()
@@ -308,3 +309,74 @@ def test_ratchet_monotonic():
 
 def test_kill_switch_well_inside_dq():
     assert CFG.kill_switch_drawdown_pct <= CFG.dq_drawdown_pct - 0.05
+
+
+# ── Forced scalp (scalp_eth profile) ───────────────────────────────────
+
+SCALP_CFG = risk_config_for_profile("scalp_eth")
+
+
+def test_scalp_candidate_eth_leads_flat_tape():
+    sig = risk_on_signals(
+        momentum={s: 0.0 for s in ("ETH", "AVAX", "LINK", "AAVE")},
+        prices={"ETH": 2500.0},
+    )
+    cand = scalp_candidate(sig)
+    assert cand is not None and cand[0] == "ETH"
+
+
+def test_forced_scalp_enters_in_risk_off_zero_momentum():
+    state = flat_state()  # equity 300, floor 300
+    sig = risk_on_signals(
+        fear_greed=20,  # extreme fear: regime is risk-off, forced scalp ignores it
+        momentum={s: 0.0 for s in allowlist.SLEEVE_SYMBOLS},
+        prices={"ETH": 2500.0},
+    )
+    intents = decide(state, sig, SCALP_CFG)
+    assert len(intents) == 1
+    assert intents[0].kind is IntentKind.ENTER
+    assert intents[0].to_symbol == "ETH"
+    # 25% of 300, capped by the 75% floor headroom.
+    assert intents[0].notional_usd == pytest.approx(75.0)
+
+
+def test_forced_scalp_skips_when_candidate_unpriced():
+    state = flat_state()
+    sig = risk_on_signals(
+        fear_greed=20,
+        momentum={s: 0.0 for s in allowlist.SLEEVE_SYMBOLS},
+        prices={},  # no ETH price -> cannot manage exits -> no entry
+    )
+    assert decide(state, sig, SCALP_CFG) == []
+
+
+def test_scalp_stops_at_minus_3pct():
+    pos = SleevePosition(
+        symbol="ETH",
+        entry_price_usd=2500.0,
+        entry_momo_score=0.0,
+        notional_usd=75.0,
+        opened_at=NOON,
+        high_price_usd=2500.0,
+    )
+    state = flat_state(position=pos)
+    sig = risk_on_signals(prices={"ETH": 2425.0})  # -3%
+    intents = decide(state, sig, SCALP_CFG)
+    assert intents[0].kind is IntentKind.EXIT
+    assert intents[0].from_symbol == "ETH"
+
+
+def test_scalp_takes_full_profit_at_plus_3pct():
+    pos = SleevePosition(
+        symbol="ETH",
+        entry_price_usd=2500.0,
+        entry_momo_score=0.0,
+        notional_usd=75.0,
+        opened_at=NOON,
+        high_price_usd=2575.0,
+    )
+    state = flat_state(position=pos)
+    sig = risk_on_signals(prices={"ETH": 2575.0})  # +3%
+    intents = decide(state, sig, SCALP_CFG)
+    assert intents[0].kind is IntentKind.TAKE_PROFIT
+    assert intents[0].notional_usd == pytest.approx(75.0)  # fraction 1.0 = full close
