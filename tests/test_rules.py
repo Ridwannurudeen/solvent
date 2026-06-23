@@ -17,6 +17,15 @@ def test_conviction_profile_re_risks_but_raises_entry_bar():
     assert cfg.min_entry_momo == pytest.approx(10.0)
     assert cfg.min_hold_hours == pytest.approx(48.0)
     assert cfg.kill_switch_drawdown_pct <= cfg.dq_drawdown_pct - 0.05
+    # Requires >=3 trades/day, with the deadline pulled earlier so three
+    # one-per-cycle qualifiers fit before the UTC day rolls over.
+    assert cfg.min_trades_per_day == 3
+    assert cfg.qual_deadline_hour_utc == 18
+    assert 24 - cfg.qual_deadline_hour_utc >= cfg.min_trades_per_day
+
+
+def test_base_config_requires_one_trade_per_day():
+    assert RiskConfig().min_trades_per_day == 1
 
 
 def test_unknown_profile_fails_closed():

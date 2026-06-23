@@ -164,7 +164,7 @@ def run_cycle(
         floor_usd=floor,
         position=store.position_obj(),
         trades_today=confirmed_today,
-        qualified_today=confirmed_today > 0,
+        qualified_today=confirmed_today >= cfg.min_trades_per_day,
         now=now,
     )
 

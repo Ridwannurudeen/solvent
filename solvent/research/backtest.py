@@ -119,7 +119,7 @@ def simulate(
             floor_usd=floor,
             position=position,
             trades_today=daily_trades.get(day, 0),
-            qualified_today=daily_trades.get(day, 0) > 0,
+            qualified_today=daily_trades.get(day, 0) >= cfg.min_trades_per_day,
             now=now,
         )
 

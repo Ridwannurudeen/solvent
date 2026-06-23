@@ -82,6 +82,10 @@ class RiskConfig:
     qual_deadline_hour_utc: int = 20
     # Notional of the fallback qualification micro-trade, in USD.
     qual_trade_usd: float = 2.0
+    # Minimum confirmed trades the day must reach. The hourly cycle tops up
+    # with qualification micro-swaps (one per cycle) until this is met; the
+    # competition only requires 1, so the default stays 1.
+    min_trades_per_day: int = 1
 
     # ── Data spend (x402 metering) ───────────────────────────────────
     # Session budget for paid data calls, USDC base units (6 decimals).
@@ -137,6 +141,10 @@ def risk_config_for_profile(profile: str) -> RiskConfig:
             stop_pct=0.08,
             min_entry_momo=10.0,
             min_hold_hours=48.0,
+            # Require >=3 trades/day; start topping up earlier so three
+            # one-per-cycle qualifiers fit before the UTC day rolls over.
+            min_trades_per_day=3,
+            qual_deadline_hour_utc=18,
             ratchet=(
                 RatchetTier(gain_pct=0.10, sleeve_cap=0.35),
                 RatchetTier(gain_pct=0.20, sleeve_cap=0.25),

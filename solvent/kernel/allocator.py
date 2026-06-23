@@ -266,9 +266,10 @@ def decide(
 
 
 def qualification_intent(state: PortfolioState, cfg: RiskConfig) -> TradeIntent | None:
-    """Deadman fallback: a micro stable->stable swap to satisfy the
-    1-trade/day rule. Independent of signals by design — it must work
-    when every data feed is down."""
+    """A micro stable->stable swap that tops the day up toward
+    cfg.min_trades_per_day. Independent of signals by design — it must work
+    when every data feed is down. One per cycle; successive cycles top up
+    until the daily minimum is met."""
     if state.qualified_today:
         return None
     if state.now.hour < cfg.qual_deadline_hour_utc:
@@ -279,7 +280,7 @@ def qualification_intent(state: PortfolioState, cfg: RiskConfig) -> TradeIntent 
         to_symbol=cfg.floor_symbols[1],
         notional_usd=cfg.qual_trade_usd,
         reason=(
-            f"QUALIFY: no trade by {cfg.qual_deadline_hour_utc:02d}:00 UTC — "
-            f"deadman micro-rotation to satisfy 1-trade/day rule"
+            f"QUALIFY: below {cfg.min_trades_per_day}-trade/day minimum after "
+            f"{cfg.qual_deadline_hour_utc:02d}:00 UTC — micro-rotation top-up"
         ),
     )
