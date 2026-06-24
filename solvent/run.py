@@ -25,6 +25,7 @@ from .exec.networks import resolve_twak_chain
 from .kernel.rules import RiskConfig, risk_config_for_profile
 from .kernel.state import MarketSignals, PortfolioState
 from .ops.alerts import alert
+from .ops.exec_recovery import auto_reconcile_no_broadcast
 from .ops.files import atomic_write_text
 from .ops.lock import SingleWriterLock
 from .receipts.chain import ReceiptChain
@@ -327,6 +328,15 @@ def main() -> int:
             with SingleWriterLock(data_dir / "writer.lock"):
                 holdings = holdings_now()
                 if args.mode == "live":
+                    healed = auto_reconcile_no_broadcast(journal, book)
+                    if healed:
+                        logger.warning(
+                            "auto-recovery resolved stuck attempts: %s", healed
+                        )
+                        alert(
+                            f"SOLVENT [{args.mode}] auto-recovered stuck swap(s) "
+                            f"(no broadcast): {healed}"
+                        )
                     atomic_write_text(
                         data_dir / "live-holdings.json",
                         json.dumps(

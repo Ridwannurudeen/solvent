@@ -4,7 +4,7 @@ import pytest
 
 from solvent.exec.executor import Journal, intent_key
 from solvent.kernel.allocator import IntentKind, TradeIntent
-from solvent.ops.exec_recovery import main
+from solvent.ops.exec_recovery import auto_reconcile_no_broadcast, main
 
 
 def _intent(notional=2.0):
@@ -170,3 +170,54 @@ def test_mark_confirmed_refuses_non_pending_entry(tmp_path):
                 "--skip-chain-check",
             ]
         )
+
+
+# ── Auto-recovery of no-broadcast timeouts ─────────────────────────────
+
+
+class _FakeBook:
+    def __init__(self, balances: dict) -> None:
+        self._b = balances
+
+    def balance(self, symbol: str) -> float:
+        return self._b[symbol]
+
+
+def _exit_intent() -> TradeIntent:
+    return TradeIntent(
+        kind=IntentKind.EXIT,
+        from_symbol="ETH",
+        to_symbol="USDT",
+        notional_usd=13.0,
+        reason="degraded unwind",
+    )
+
+
+def test_auto_recovery_heals_unchanged_source_balance(tmp_path):
+    journal = Journal(tmp_path / "journal.jsonl")
+    journal.mark_attempted(
+        "k1", _exit_intent(), pre_balances={"ETH": 0.0078, "USDT": 100.0}
+    )
+    # ETH unchanged on-chain => the swap never broadcast => safe to fail.
+    healed = auto_reconcile_no_broadcast(journal, _FakeBook({"ETH": 0.0078}))
+    assert healed == ["k1"]
+    assert not journal.has_unresolved()
+
+
+def test_auto_recovery_leaves_attempt_when_source_spent(tmp_path):
+    journal = Journal(tmp_path / "journal.jsonl")
+    journal.mark_attempted(
+        "k2", _exit_intent(), pre_balances={"ETH": 0.0078, "USDT": 100.0}
+    )
+    # ETH spent => a swap likely broadcast => leave PENDING for manual review.
+    healed = auto_reconcile_no_broadcast(journal, _FakeBook({"ETH": 0.0}))
+    assert healed == []
+    assert journal.has_unresolved()
+
+
+def test_auto_recovery_skips_without_snapshot(tmp_path):
+    journal = Journal(tmp_path / "journal.jsonl")
+    journal.mark_attempted("k3", _exit_intent())  # no pre_balances
+    healed = auto_reconcile_no_broadcast(journal, _FakeBook({"ETH": 0.0}))
+    assert healed == []
+    assert journal.has_unresolved()

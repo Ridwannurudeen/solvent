@@ -154,6 +154,42 @@ def mark_failed(
     return 0
 
 
+def auto_reconcile_no_broadcast(journal, book, *, rel_tol: float = 0.005) -> list[str]:
+    """Self-heal stuck attempts that provably never broadcast.
+
+    A timed-out swap leaves an unresolved ATTEMPTED entry that halts the
+    executor indefinitely. This resolves (mark-failed) only the unambiguous
+    case: no tx_hash AND the source-token balance is essentially unchanged
+    on-chain vs the pre-trade snapshot (a real swap spends the source token).
+    Anything ambiguous — a tx_hash is present, the source balance moved, or
+    there is no snapshot — is left PENDING so the executor stays safely
+    halted for manual review. Append-only; never broadcasts.
+    """
+    healed: list[str] = []
+    for entry in journal.pending_entries():
+        if entry.get("tx_hash"):
+            continue
+        pre = entry.get("pre_balances") or {}
+        from_symbol = entry.get("from")
+        if not from_symbol or from_symbol not in pre:
+            continue
+        try:
+            now_balance = book.balance(from_symbol)
+        except Exception:
+            continue  # cannot verify on-chain -> leave halted (safe)
+        pre_balance = float(pre[from_symbol])
+        tol = max(1e-9, abs(pre_balance) * rel_tol)
+        if abs(now_balance - pre_balance) <= tol:
+            journal.resolve_attempt(
+                entry["key"],
+                ok=False,
+                tx_hash=None,
+                detail="auto-recovery: no broadcast (source balance unchanged on-chain)",
+            )
+            healed.append(entry["key"])
+    return healed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
