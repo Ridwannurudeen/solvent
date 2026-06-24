@@ -233,11 +233,20 @@ def test_min_hold_hours_suppresses_momentum_decay():
     assert decide(pos_state(), sig, cfg) == []
 
 
-def test_degraded_data_unwinds_open_position():
+def test_degraded_data_unwinds_open_position_when_blind():
+    # No fallback price for the held token -> truly blind -> unwind.
     sig = risk_on_signals(momentum={"CAKE": 0.0}, degraded=True, prices={})
     intents = decide(pos_state(), sig, CFG)
     assert [i.kind for i in intents] == [IntentKind.EXIT]
     assert "DEGRADED DATA UNWIND" in intents[0].reason
+
+
+def test_degraded_but_priced_holds_position():
+    # CMC degraded but a fallback price exists (e.g. Binance) -> hold and let
+    # the price-based stop manage it; do NOT panic-unwind (a timed-out swap
+    # there leaves an unresolved attempt that freezes the executor).
+    sig = risk_on_signals(momentum={"CAKE": 0.0}, degraded=True, prices={"CAKE": 2.5})
+    assert decide(pos_state(), sig, CFG) == []
 
 
 def test_holding_blocks_new_entries():

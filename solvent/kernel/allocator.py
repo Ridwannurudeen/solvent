@@ -162,7 +162,12 @@ def decide(
     # ── 1. Open-position management (stop / decay / ratchet) ────────
     pos = state.position
     if pos is not None:
-        if signals.degraded:
+        price = signals.prices.get(pos.symbol)
+        if signals.degraded and price is None:
+            # Only unwind when truly blind. A fallback price (e.g. Binance
+            # while CMC is degraded) still drives the stop / take-profit below,
+            # so a transient data blip must NOT force a panic-swap — those can
+            # time out and leave an unresolved attempt that freezes the executor.
             intents.append(
                 TradeIntent(
                     kind=IntentKind.EXIT,
@@ -170,13 +175,11 @@ def decide(
                     to_symbol=cfg.floor_symbols[0],
                     notional_usd=pos.notional_usd,
                     reason=(
-                        f"DEGRADED DATA UNWIND: exit {pos.symbol}; "
-                        "market-data verification failed"
+                        f"DEGRADED DATA UNWIND: exit {pos.symbol}; no verifiable price"
                     ),
                 )
             )
             return intents
-        price = signals.prices.get(pos.symbol)
         if price is not None and pos.entry_price_usd > 0:
             pnl_pct = price / pos.entry_price_usd - 1.0
             high_price = max(pos.high_price_usd, pos.entry_price_usd, price)

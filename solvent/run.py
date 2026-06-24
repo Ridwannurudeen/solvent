@@ -353,6 +353,12 @@ def main() -> int:
                 atomic_write_text(heartbeat, datetime.now(timezone.utc).isoformat())
             if summary["intents"] > 0 or summary["degraded"]:
                 alert(f"SOLVENT [{args.mode}] {json.dumps(summary)}")
+            if summary.get("runtime_status") == "HALTED" or journal.has_unresolved():
+                alert(
+                    f"SOLVENT [{args.mode}] ATTENTION: runtime="
+                    f"{summary.get('runtime_status')} "
+                    f"unresolved={journal.has_unresolved()} — executor may be frozen"
+                )
             return True
         except RuntimeError as exc:
             if "state writer already active" in str(exc):
