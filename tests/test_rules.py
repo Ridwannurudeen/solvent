@@ -35,9 +35,9 @@ def test_scalp_profile_is_tight_drawdown_first():
     assert cfg.stop_pct == pytest.approx(0.03)
     assert cfg.take_profit_pct == pytest.approx(0.03)
     assert cfg.take_profit_fraction == pytest.approx(1.0)
-    assert cfg.sleeve_frac_target == pytest.approx(0.25)
-    assert cfg.max_trade_frac == pytest.approx(0.25)
-    assert cfg.floor_frac_min == pytest.approx(0.75)
+    assert cfg.sleeve_frac_target == pytest.approx(0.40)
+    assert cfg.max_trade_frac == pytest.approx(0.40)
+    assert cfg.floor_frac_min == pytest.approx(0.60)
     assert cfg.min_hold_hours == pytest.approx(0.0)
     assert cfg.min_trades_per_day == 3
     # Drawdown-first: the kill switch stays well below the 30% DQ line.

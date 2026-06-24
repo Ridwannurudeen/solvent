@@ -178,14 +178,15 @@ def risk_config_for_profile(profile: str) -> RiskConfig:
     if name == "scalp_eth":
         # Daily scalp of the big majors (ETH-led): force an entry when flat
         # even without a risk-on momentum signal, then exit on a tight
-        # symmetric +/-3% band. Drawdown-first: a 25% sleeve cap plus 3%
-        # stops plus the 22% kill switch keep the book far from the 30% DQ.
+        # symmetric +/-3% band. Sleeve sized to 40% of equity (~$100 on a
+        # ~$250 book); 3% stops plus the 22% kill switch keep the book far
+        # from the 30% DQ.
         return replace(
             base,
             forced_scalp=True,
-            floor_frac_min=0.75,
-            sleeve_frac_target=0.25,
-            max_trade_frac=0.25,
+            floor_frac_min=0.60,
+            sleeve_frac_target=0.40,
+            max_trade_frac=0.40,
             stop_pct=0.03,
             take_profit_pct=0.03,
             take_profit_fraction=1.0,

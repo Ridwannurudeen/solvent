@@ -336,8 +336,8 @@ def test_forced_scalp_enters_in_risk_off_zero_momentum():
     assert len(intents) == 1
     assert intents[0].kind is IntentKind.ENTER
     assert intents[0].to_symbol == "ETH"
-    # 25% of 300, capped by the 75% floor headroom.
-    assert intents[0].notional_usd == pytest.approx(75.0)
+    # 40% of 300, capped by the 60% floor headroom.
+    assert intents[0].notional_usd == pytest.approx(120.0)
 
 
 def test_forced_scalp_skips_when_candidate_unpriced():
