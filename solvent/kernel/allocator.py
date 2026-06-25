@@ -94,11 +94,12 @@ def best_candidate(
 
 # "Big guns": established large-caps from the executable sleeve, ETH first so
 # it wins ties (e.g. a flat tape where every momentum score is 0).
-# Restricted to ETH: it is the one big-major TWAK reliably resolves and swaps
-# by symbol on BSC. Others (e.g. AAVE) are pinned in the allowlist but TWAK
-# returns TOKEN_NOT_FOUND for the symbol, so a forced scalp into them hard-fails
-# and loops. Keep the scalp on the proven-swappable token.
-SCALP_MAJORS = ("ETH",)
+# Big-majors the forced scalp may rotate into, restricted to the symbols TWAK
+# actually resolves and swaps on BSC (probed 2026-06-25 via quote-only). Many
+# allowlist symbols (XRP/ADA/LINK/DOT/UNI/BCH/AAVE/ETC/FIL/CAKE/INJ) return
+# TOKEN_NOT_FOUND from TWAK, so they are excluded to avoid hard-fail entry
+# loops. ETH leads ties.
+SCALP_MAJORS = ("ETH", "LTC", "AVAX", "ATOM")
 
 
 def scalp_candidate(
