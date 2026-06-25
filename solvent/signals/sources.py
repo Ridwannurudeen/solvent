@@ -423,9 +423,18 @@ class CrossCheckedSource:
                     continue
                 momentum[symbol] = min(primary_score, secondary_score)
 
+        # Fallback valuation: when the paid primary is missing a price (e.g. CMC
+        # degraded) use the secondary's price so a held token is still valued.
+        # This keeps equity whole -- no phantom drawdown / kill switch -- and
+        # lets stops run during a primary outage. Entries are unaffected: they
+        # gate on primary momentum, which is absent for any secondary-only symbol.
+        prices = dict(secondary_signals.prices)
+        prices.update(primary_signals.prices)
+
         return (
             replace(
                 primary_signals,
+                prices=prices,
                 momentum=momentum,
                 degraded=degraded,
                 source_deviation_pct=deviations,

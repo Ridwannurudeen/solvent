@@ -280,3 +280,55 @@ def test_cross_checked_source_drops_unconfirmed_positive_momentum_without_degrad
     # normal per-token source disagreement, not a data outage.
     assert signals.degraded is False
     assert "CAKE" not in signals.momentum
+
+
+def test_cross_checked_source_falls_back_to_secondary_price_when_primary_missing():
+    # CMC degraded with no quotes; Binance still has the held token's price.
+    # The fallback must value the token so equity stays whole (no phantom
+    # drawdown / kill switch), while degraded stays True to suppress new entries.
+    primary = StaticSource(
+        MarketSignals(
+            fear_greed=None,
+            btc_funding_rate=None,
+            prices={},
+            momentum={},
+            degraded=True,
+        )
+    )
+    secondary = StaticSource(
+        MarketSignals(
+            fear_greed=None,
+            btc_funding_rate=None,
+            prices={"ETH": 1600.0},
+            degraded=False,
+        )
+    )
+
+    signals, _ = CrossCheckedSource(primary, secondary).fetch()
+
+    assert signals.prices["ETH"] == 1600.0  # valued via secondary fallback
+    assert signals.degraded is True  # primary outage still flagged
+
+
+def test_cross_checked_source_primary_price_takes_precedence():
+    primary = StaticSource(
+        MarketSignals(
+            fear_greed=60,
+            btc_funding_rate=0.0001,
+            prices={"CAKE": 2.50},
+            degraded=False,
+        )
+    )
+    secondary = StaticSource(
+        MarketSignals(
+            fear_greed=None,
+            btc_funding_rate=None,
+            prices={"CAKE": 2.55, "ETH": 1600.0},
+            degraded=False,
+        )
+    )
+
+    signals, _ = CrossCheckedSource(primary, secondary).fetch()
+
+    assert signals.prices["CAKE"] == 2.50  # primary wins where present
+    assert signals.prices["ETH"] == 1600.0  # secondary fills the gap
