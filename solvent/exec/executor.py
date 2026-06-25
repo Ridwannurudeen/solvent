@@ -328,7 +328,13 @@ class TwakExecutor:
             if tx_hash is None and _pre_broadcast_failure(out):
                 self.journal.mark_result(key, False, None, out)
                 return ExecutionResult(key, False, None, out[:200], "failed")
-            logger.error("twak attempt outcome UNKNOWN - halting further sends")
+            logger.error(
+                "twak attempt outcome UNKNOWN - halting further sends; "
+                "rc=%s stdout=%r stderr=%r",
+                proc.returncode,
+                proc.stdout.strip()[:400],
+                proc.stderr.strip()[:400],
+            )
             return ExecutionResult(key, False, tx_hash, out[:200], "unresolved")
         verification = None
         if self.receipt_verifier is not None:
