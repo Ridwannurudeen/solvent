@@ -136,7 +136,12 @@ def test_degraded_data_freezes_trading(tmp_path):
     assert receipt["signals"]["degraded"] is True
 
 
-def test_degraded_data_unwinds_open_position(tmp_path):
+def test_degraded_data_holds_unpriced_position(tmp_path):
+    # CMC degraded AND the held token has no price: equity is understated (floor
+    # only) so a naive trailing-drawdown read (240 vs peak 400 = 40%) trips the
+    # kill switch. The agent must HOLD, not force-unwind into a phantom
+    # drawdown -- that swap times out and freezes the executor. Degraded analog
+    # of #11 (test_missing_held_price_does_not_phantom_halt).
     signals = MarketSignals(
         fear_greed=None,
         btc_funding_rate=None,
@@ -144,14 +149,45 @@ def test_degraded_data_unwinds_open_position(tmp_path):
         prices={},
         degraded=True,
     )
-    store = StateStore(path=tmp_path / "state.json", position=_position())
+    store = StateStore(
+        path=tmp_path / "state.json",
+        start_equity_usd=300.0,
+        peak_equity_usd=400.0,
+        position=_position(),
+    )
     summary, receipt = _run(
         tmp_path, signals, {"USDT": 240.0, "CAKE": 24.0}, store, NOON
     )
+    assert summary["intents"] == 0  # held: no exit, no kill switch
+    assert store.runtime_status == "ACTIVE"  # not latched on a price gap
+    assert store.position is not None  # position retained
+    assert store.peak_equity_usd == 400.0  # peak not skewed by partial equity
+    assert receipt["signals"]["priced_complete"] is False
+
+
+def test_degraded_unpriced_position_still_qualifies_after_deadline(tmp_path):
+    # Holding an unpriced position through a degraded feed must not DQ the day:
+    # the $2 stable->stable qualifier still fires after the deadline while the
+    # position is held untouched.
+    signals = MarketSignals(
+        fear_greed=None,
+        btc_funding_rate=None,
+        momentum={},
+        prices={},
+        degraded=True,
+    )
+    store = StateStore(
+        path=tmp_path / "state.json",
+        start_equity_usd=300.0,
+        peak_equity_usd=400.0,
+        position=_position(),
+    )
+    summary, receipt = _run(
+        tmp_path, signals, {"USDT": 240.0, "CAKE": 24.0}, store, EVENING
+    )
     assert summary["intents"] == 1
-    assert receipt["intents"][0]["kind"] == "exit"
-    assert "DEGRADED DATA UNWIND" in receipt["thesis"]
-    assert store.position is None
+    assert receipt["intents"][0]["kind"] == "qualify"
+    assert store.position is not None  # still held, only qualified
 
 
 def test_kill_switch_liquidates_and_clears_position(tmp_path):

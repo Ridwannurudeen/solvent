@@ -230,11 +230,13 @@ def run_cycle(
                     reason=store.halt_reason or "RISK_REDUCING: exit open sleeve",
                 )
             ]
-    elif not priced_complete and not signals.degraded and state.position is not None:
-        # Feed is up but one held token is unpriced: equity is understated, so
-        # any drawdown/stop signal is spurious. Hold the position and act on no
-        # price we don't have; still qualify the day. (A fully degraded feed
-        # falls through to decide()'s degraded-data unwind instead.)
+    elif not priced_complete and state.position is not None:
+        # A held token is unpriced, so equity is understated and any
+        # drawdown/stop/kill-switch signal off it is spurious. Hold the position
+        # and only run the daily qualifier -- never force a swap on a price we
+        # don't have (those time out and freeze the executor). This covers a
+        # degraded feed too: when CMC drops the spot price, holding beats
+        # liquidating the sleeve into a phantom drawdown.
         intents = []
         qual = qualification_intent(state, cfg)
         if qual is not None:
