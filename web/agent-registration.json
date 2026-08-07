@@ -1,0 +1,44 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "SOLVENT",
+  "description": "Glass-box autonomous trading agent on BNB Smart Chain. Every decision is a hash-chained receipt; the chain head is anchored daily as ERC-8004 metadata under this identity. Anyone can recompute the public log and check it against the on-chain anchors.",
+  "url": "https://solvent.gudman.xyz",
+  "image": "https://solvent.gudman.xyz/og.png",
+  "active": true,
+  "version": "0.1.0",
+  "agent_type": "trading",
+  "categories": ["trading", "analytics"],
+  "tags": ["glass-box", "decision-receipts", "erc-8004", "bsc", "regime-signal"],
+  "skills": [
+    {
+      "id": "daily-regime-signal",
+      "name": "Daily regime signal",
+      "description": "Verifiable market-regime read (risk-on/risk-off) whose signal_hash binds to the latest receipt, chain head, and anchor."
+    }
+  ],
+  "services": [
+    {
+      "name": "receipts-api",
+      "description": "Read-only glass-box API: hash-chained receipts, live chain verification, anchors, policy compliance.",
+      "protocol": "Web",
+      "endpoint": "https://solvent.gudman.xyz/verify"
+    },
+    {
+      "name": "regime-signal",
+      "description": "Latest daily regime signal payload with receipt-bound signal_hash.",
+      "protocol": "Web",
+      "endpoint": "https://solvent.gudman.xyz/signal"
+    }
+  ],
+  "x402Support": true,
+  "supportedTrust": ["reputation"],
+  "registrations": [
+    {
+      "agentId": 136384,
+      "agentRegistry": "eip155:56:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+    }
+  ],
+  "documentation": "https://github.com/Ridwannurudeen/solvent",
+  "limitations": "Capital-preservation barbell, not an alpha claim. Receipts after the last daily anchor are recompute-consistent but not yet on-chain-bound. Historical record; live status is reported honestly at /state.",
+  "updatedAt": "2026-08-06T00:00:00Z"
+}
